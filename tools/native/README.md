@@ -39,7 +39,7 @@ writable directory.
 
 The in-app Phase 1 check is local-only. It runs `--version` and an rsync dry run
 between two empty directories under the app cache. It cannot touch a Storage
-Box or the real `Bianca/` folder.
+Box or a real user backup folder.
 
 Remote device verification must use a dedicated disposable server path such as
 `.piffbackup-test/<random-id>/`, never user media. A host key must already be in

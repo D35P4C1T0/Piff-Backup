@@ -21,10 +21,10 @@ class RemoteDirectoryBrowserTest {
 
         assertEquals(
             listOf(
-                RemoteDirectory("Camera", "Bianca/Camera"),
-                RemoteDirectory("Trips 😄", "Bianca/Trips 😄"),
+                RemoteDirectory("Camera", "Matteo/Camera"),
+                RemoteDirectory("Trips 😄", "Matteo/Trips 😄"),
             ),
-            RemoteDirectoryListParser.parse(RemoteRelativePath.create("Bianca"), output),
+            RemoteDirectoryListParser.parse(RemoteRelativePath.create("Matteo"), output),
         )
     }
 
@@ -40,7 +40,7 @@ class RemoteDirectoryBrowserTest {
                 identityFile = File("/private/key"),
                 sshHomeDirectory = File("/private/home"),
             ),
-            parent = RemoteRelativePath.create("Bianca/Family's photos"),
+            parent = RemoteRelativePath.create("Matteo/Family's photos"),
         )
 
         assertTrue("--list-only" in arguments)
@@ -49,6 +49,6 @@ class RemoteDirectoryBrowserTest {
         assertFalse(arguments.any { it.startsWith("--out-format=") })
         assertFalse("--recursive" in arguments || "-r" in arguments)
         assertFalse(arguments.any { it == "--delete" || it.startsWith("--delete-") })
-        assertEquals("u123456@u123456.your-storagebox.de:Bianca/Family's photos/", arguments.last())
+        assertEquals("u123456@u123456.your-storagebox.de:Matteo/Family's photos/", arguments.last())
     }
 }

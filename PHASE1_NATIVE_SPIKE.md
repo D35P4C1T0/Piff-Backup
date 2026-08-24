@@ -19,14 +19,14 @@ extracts executable code at runtime.
 
 ## Safety boundary
 
-No automated Phase 1 command names or addresses `Bianca/`. The in-app probe only
-uses two empty app-cache directories. Any remote verification must use a unique,
-disposable `.piffbackup-test/<random-id>/` directory on a test/equivalent server.
-It must never use a real media destination.
+No automated Phase 1 command names or addresses a user backup root. The in-app
+probe only uses two empty app-cache directories. Any remote verification must
+use a unique, disposable `.piffbackup-test/<random-id>/` directory on a
+test/equivalent server. It must never use a real media destination.
 
-The SMB-to-SSH assumption (`/backup/Bianca/` versus SSH-relative `Bianca/`) is
-therefore deliberately **not verified by this automated spike**. It requires the
-later harmless onboarding check with the owner's explicit connection details.
+The SMB-to-SSH root mapping is therefore deliberately **not verified by this
+automated spike**. It requires the later harmless onboarding check with the
+owner's explicit connection details and user-entered root.
 
 ## Evidence recorded in this repository
 

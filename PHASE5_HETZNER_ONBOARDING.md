@@ -6,11 +6,12 @@ running API 33 on 2026-08-24.
 ## Password-once authentication
 
 The welcome and connection screens implement the deliberately small flow from
-the project specification. The username is prefilled but editable, the normal
-hostname is derived as `<username>.your-storagebox.de`, an advanced hostname
-override is available, and SSH always uses Hetzner's port 23. Connection
-failures explain the SSH Support and External Reachability settings and offer a
-link to the Hetzner Console.
+the project specification. The username and existing top-level backup folder
+start empty and must be entered by the user. The normal hostname is derived as
+`<username>.your-storagebox.de`, an advanced hostname override is available,
+and SSH always uses Hetzner's port 23. Connection failures explain the SSH
+Support and External Reachability settings and offer a link to the Hetzner
+Console.
 
 The packaged Dropbear client remains key-only. Initial password authentication
 therefore uses SSHJ 0.40.0 solely to run Hetzner's fixed `install-ssh-key`
@@ -45,12 +46,19 @@ After key installation the coordinator saves setup as incomplete and performs
 two separate native Dropbear connections:
 
 1. `pwd` proves the generated key can authenticate.
-2. `ls -d Bianca/` proves the expected SSH-home-relative directory exists.
+2. `ls -d <backup-root>/` proves the selected SSH-home-relative directory
+   exists.
 
-Both commands are fixed, bounded to 30 seconds, and read-only. Setup becomes
-complete only after both return exit code 0. The app does not create a marker,
-upload a file, list media contents, run rsync, or modify `Bianca/` during this
-phase.
+The backup root is restricted to one safe top-level name before it is included
+in the second command. Both commands are bounded to 30 seconds and read-only.
+Setup becomes complete only after both return exit code 0. The app does not
+create a marker, upload a file, list media contents, run rsync, or modify the
+selected root during this phase.
+
+Real-device testing found that Hetzner's restricted shell rejects the otherwise
+common `test -d` form with exit code 8 (`Command not found`). The verifier uses
+the supported `ls -d` form and has a focused regression test for the exact
+command.
 
 Hetzner documents that the main account's SMB `/backup` share and SSH home are
 different views of the same Storage Box root. Phase 5 combines that documented
@@ -70,25 +78,26 @@ The final Phase 5 gate covers:
   `known_hosts` permissions; and
 - debug, minified release, instrumentation-APK, and Android lint builds.
 
-All 49 host tests and all 12 Android tests pass, as do the debug, minified
-release, instrumentation-APK, and lint builds. The device run includes the four
-Phase 5 credential, native-key, cleanup, and known-host tests. The unsigned
-minified release APK is 3,922,578 bytes. Lint has no errors; its remaining
-security warning points into an unused TLS trust-manager class in the transitive
-Bouncy Castle archive, not PiffBackup's SSH host-key verifier, and R8 removes
-that class from the release application.
+Host tests, debug and instrumentation APK compilation, the minified release
+build, and Android lint pass. The earlier device gate includes the Phase 5
+credential, native-key, cleanup, and known-host tests. Lint has no errors; its
+remaining security warning points into an unused TLS trust-manager class in the
+transitive Bouncy Castle archive, not PiffBackup's SSH host-key verifier, and R8
+removes that class from the release application.
 
-No live Storage Box connection was made, and no real `Bianca/` folder was
-touched. Before relying on onboarding in production, run one explicit manual
-setup against the intended account, compare the displayed fingerprint, and
-confirm that the read-only `Bianca/` check succeeds.
+A user-driven live setup succeeded on the Samsung SM-P610 with `Matteo/` entered
+as the dedicated development root. Native key authentication, `pwd`, and the
+read-only `ls -d Matteo/` check all succeeded. No password, username, host key,
+or personal filename was committed, and connection verification performed no
+remote write or deletion.
 
 ## Deferred to later phases
 
-- Phase 6 adds remote folder browsing/mapping, adoption dry-run reconciliation,
+- Phase 6 added remote folder browsing/mapping, adoption dry-run reconciliation,
   a calculated summary, and confirmed initial upload.
-- Phase 7 replaces the onboarding completion placeholder with the minimal home,
-  folder, and settings screens.
+- A first Phase 7 slice replaced the terminal completion placeholder with
+  actions to check saved mappings, change folders, or change the connection.
+  The broader home/history/settings UI remains.
 - Phase 8 moves long-running backup work into the required background APIs;
   Phase 5 onboarding remains a short, timeout-bounded foreground operation.
 - Phase 9 repeats device security/accessibility/localization checks and release

@@ -1,5 +1,6 @@
 package com.d35p4c1t0.piffbackup.onboarding
 
+import com.d35p4c1t0.piffbackup.backup.RemoteRelativePath
 import com.d35p4c1t0.piffbackup.rsync.StrictSshConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -9,14 +10,26 @@ import java.io.File
 
 class StorageBoxVerificationCommandsTest {
     @Test
-    fun `destination verification is read only and fixed to Bianca`() {
+    fun `destination verification is read only and uses the selected folder`() {
         assertEquals(listOf("pwd"), StorageBoxVerificationCommands.AUTHENTICATION_CHECK)
-        assertEquals(listOf("ls", "-d", "Bianca/"), StorageBoxVerificationCommands.DESTINATION_CHECK)
+        val destinationCheck = StorageBoxVerificationCommands.destinationCheck(
+            RemoteRelativePath.create("Matteo"),
+        )
+        assertEquals(listOf("ls", "-d", "Matteo/"), destinationCheck)
 
         val allArguments = StorageBoxVerificationCommands.AUTHENTICATION_CHECK +
-            StorageBoxVerificationCommands.DESTINATION_CHECK
+            destinationCheck
         assertFalse(allArguments.any { it in setOf("rm", "rmdir", "mv", "touch", "mkdir") })
         assertFalse(allArguments.any { it.contains("--delete") })
+    }
+
+    @Test
+    fun `destination check rejects remote shell syntax`() {
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            StorageBoxVerificationCommands.destinationCheck(
+                RemoteRelativePath.create("Matteo;touch"),
+            )
+        }
     }
 
     @Test

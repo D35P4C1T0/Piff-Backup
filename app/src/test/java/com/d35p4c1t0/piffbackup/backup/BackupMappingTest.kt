@@ -40,44 +40,44 @@ class BackupMappingTest {
     @Test
     fun `remote path accepts ordinary unicode but rejects unsafe components`() {
         assertEquals(
-            "Bianca/Family's album 😄/",
-            RemoteRelativePath.create("Bianca/Family's album 😄/").pathWithTrailingSlash,
+            "Matteo/Family's album 😄/",
+            RemoteRelativePath.create("Matteo/Family's album 😄/").pathWithTrailingSlash,
         )
-        listOf("/Bianca/Camera", "Bianca/../Other", "Bianca//Camera", "Bianca/./Camera", "Bianca/a\nb").forEach {
+        listOf("/Matteo/Camera", "Matteo/../Other", "Matteo//Camera", "Matteo/./Camera", "Matteo/a\nb").forEach {
             assertThrows(IllegalArgumentException::class.java) { RemoteRelativePath.create(it) }
         }
     }
 
     @Test
-    fun `rejects local overlap remote overlap and paths outside Bianca`() {
+    fun `rejects local overlap remote overlap and paths outside configured root`() {
         val shared = Files.createTempDirectory("piffbackup-overlap").toFile()
-        val bianca = RemoteRelativePath.create("Bianca")
+        val remoteBase = RemoteRelativePath.create("Matteo")
         val pictures = BackupMapping(
             CanonicalLocalRoot.create(File(shared, "Pictures").path, shared),
-            RemoteRelativePath.create("Bianca/Pictures"),
+            RemoteRelativePath.create("Matteo/Pictures"),
         )
         val screenshots = BackupMapping(
             CanonicalLocalRoot.create(File(shared, "Pictures/Screenshots").path, shared),
-            RemoteRelativePath.create("Bianca/Screenshots"),
+            RemoteRelativePath.create("Matteo/Screenshots"),
         )
         assertThrows(IllegalArgumentException::class.java) {
-            BackupMappingValidator.validate(listOf(pictures, screenshots), bianca)
+            BackupMappingValidator.validate(listOf(pictures, screenshots), remoteBase)
         }
 
         val camera = BackupMapping(
             CanonicalLocalRoot.create(File(shared, "DCIM/Camera").path, shared),
-            RemoteRelativePath.create("Bianca/Pictures/Camera"),
+            RemoteRelativePath.create("Matteo/Pictures/Camera"),
         )
         assertThrows(IllegalArgumentException::class.java) {
-            BackupMappingValidator.validate(listOf(pictures, camera), bianca)
+            BackupMappingValidator.validate(listOf(pictures, camera), remoteBase)
         }
 
         val outside = BackupMapping(
             CanonicalLocalRoot.create(File(shared, "Movies").path, shared),
-            RemoteRelativePath.create("NotBianca/Movies"),
+            RemoteRelativePath.create("SomeoneElse/Movies"),
         )
         assertThrows(IllegalArgumentException::class.java) {
-            BackupMappingValidator.validate(listOf(outside), bianca)
+            BackupMappingValidator.validate(listOf(outside), remoteBase)
         }
     }
 }

@@ -101,10 +101,10 @@ class InitialAdoptionInstrumentedTest {
             assertEquals(
                 result.stdout,
                 listOf(
-                    RemoteDirectory("Camera", "Bianca/Camera"),
-                    RemoteDirectory("Trips 😄", "Bianca/Trips 😄"),
+                    RemoteDirectory("Camera", "Matteo/Camera"),
+                    RemoteDirectory("Trips 😄", "Matteo/Trips 😄"),
                 ),
-                RemoteDirectoryListParser.parse(RemoteRelativePath.create("Bianca"), result.stdout),
+                RemoteDirectoryListParser.parse(RemoteRelativePath.create("Matteo"), result.stdout),
             )
         } finally {
             root.deleteRecursively()
@@ -179,7 +179,7 @@ class InitialAdoptionInstrumentedTest {
                 treeUri = "content://com.android.externalstorage.documents/tree/primary%3ACamera",
                 canonicalLocalPath = camera.path,
                 relativeMediaStorePrefix = "Camera/",
-                relativeRemotePath = "Bianca/Camera",
+                relativeRemotePath = "Matteo/Camera",
                 mode = MappingModeValue.MEDIA_FAST,
             ),
             FolderMappingInput(
@@ -188,7 +188,7 @@ class InitialAdoptionInstrumentedTest {
                 treeUri = "content://com.android.externalstorage.documents/tree/primary%3AEmpty",
                 canonicalLocalPath = empty.path,
                 relativeMediaStorePrefix = "Empty/",
-                relativeRemotePath = "Bianca/Empty",
+                relativeRemotePath = "Matteo/Empty",
                 mode = MappingModeValue.ALL_FILES,
             ),
         )
@@ -213,6 +213,7 @@ class InitialAdoptionInstrumentedTest {
                     id = PROFILE_ID,
                     username = "u123456",
                     hostname = "u123456.your-storagebox.de",
+                    remoteBasePath = "Matteo",
                     encryptedCredentialRef = "fake-ref",
                     pinnedHostKey = "ssh-ed25519 AQID",
                     setupCompleted = true,

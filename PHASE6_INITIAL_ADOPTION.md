@@ -75,26 +75,36 @@ incremental lists or unrelated files.
 
 ## Verification
 
-The Phase 6 gate completed with:
-
-- 54 passing host unit tests;
-- 16 passing Android tests on the wireless SM-P610, including the packaged
-  ARM64 rsync list-only compatibility test;
-- successful debug, instrumentation, and minified release APK builds;
-- Android lint with no errors; and
-- an unsigned R8-minified release APK of 4,019,362 bytes.
+The Phase 6 gate completed with passing host unit tests, Android tests on the
+wireless SM-P610 (including packaged ARM64 rsync list-only compatibility),
+successful debug, instrumentation, and minified release APK builds, and Android
+lint with no errors.
 
 Tests cover protected non-recursive browsing, safe parser rejection, exact
 NUL-list contents for both mapping modes, source/destination overlap checks,
 exact abandoned-list cleanup, primary picker-token validation, checkpoint and
-run-summary atomicity, and failure retention. All Android fixtures stay beneath
-app-private storage. No live Storage Box command was run, no upload occurred,
-and the real `Bianca/` directory was not read or changed.
+run-summary atomicity, and failure retention. All automated Android fixtures
+stay beneath app-private storage.
+
+The user also completed a live initial backup on the SM-P610 against the
+explicit `Matteo/` development root: 18 files totaling 57,864,205 bytes. Passive
+ADB process sampling observed the native rsync process for about 21 seconds.
+The app reached successful completion and persisted the result. This was a
+normal user-confirmed one-way upload; neither the test nor the app deleted
+remote files. See `PERFORMANCE.md` for the measurement conditions and caveats.
+
+The successful completion screen is no longer terminal. It now offers:
+
+- `Check for new files`, which reuses the saved mappings and enters the safe
+  preview flow;
+- `Change folders`; and
+- `Change connection`.
 
 ## Deferred to later phases
 
-- Phase 7 replaces the completion placeholder with the minimal home, folders,
-  and settings navigation and exposes ongoing mapping management.
+- Phase 7 still needs the broader home/history/settings experience. Its first
+  navigation slice is complete: users can leave successful completion and
+  revisit preview, folders, or connection settings.
 - Phase 8 moves potentially long preview/transfer work into supported UIDT or
   WorkManager execution with durable pending adoption state. Phase 6's current
   foreground execution is cancellation- and retry-safe, but it does not claim
@@ -102,6 +112,8 @@ and the real `Bianca/` directory was not read or changed.
 - Phase 9 performs the final all-files-access, accessibility, localization,
   performance, and release review.
 
-Live account validation still requires an explicit user-run preview and
-confirmed transfer. Never use destructive or performance fixtures against the
-real `Bianca/` destination.
+The current check-again action re-enters the frozen reconciliation flow; the
+background incremental coordinator and scheduler remain Phase 8 work. Confirmed
+roots also run sequentially. Bounded parallel transfer is a future experiment,
+not current behavior, and must follow accurate internal timing. Never use
+destructive or generated performance fixtures against a real user destination.

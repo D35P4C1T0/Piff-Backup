@@ -30,10 +30,11 @@ The scale estimates discussed during planning were roughly 100,000 existing remo
 - Storage Box username: provided by the user during onboarding
 - Storage Box hostname: `<storage-box-username>.your-storagebox.de`
 - Hetzner SSH/rsync port: `23`
-- Existing SMB-visible destination: `smb://<storage-box-username>.your-storagebox.de/backup/Bianca/`
-- Expected SSH/rsync home-relative destination corresponding to that SMB path: `Bianca/`
+- Backup root: entered by the user during first-run onboarding; there is no product default
+- Non-destructive development verification root: `Matteo/`
+- Corresponding SMB-visible test destination: `smb://<storage-box-username>.your-storagebox.de/backup/Matteo/`
 
-Important: the SMB share component `backup` represents the main account's share and should not automatically become part of the rsync destination. Before adoption, verify harmlessly that SSH-relative `Bianca/` exposes the same directory as SMB `/backup/Bianca/`. Do not assume or write to `backup/Bianca/` unless a real connection test proves that is correct.
+Important: the SMB share component `backup` represents the main account's share and should not automatically become part of the rsync destination. Before adoption, verify harmlessly that the user-entered SSH-relative backup root exposes the same directory as its SMB `/backup/<backup-root>/` path. For development tests, use the separately designated `Matteo/` root. Do not assume a root name and do not write during connection verification.
 
 Never commit a password, private key, live host key, generated credential, or personally identifying file list to Git.
 
@@ -44,18 +45,18 @@ The user can configure an arbitrary number of local folder roots. Every selected
 For each local root, persist an explicit mapping:
 
 ```text
-local Android folder -> remote folder under Bianca/
+local Android folder -> remote folder under <backup-root>/
 ```
 
 Examples only:
 
 ```text
-/storage/emulated/0/DCIM/Camera/       -> Bianca/Camera/
-/storage/emulated/0/Pictures/          -> Bianca/Pictures/
-/storage/emulated/0/Movies/            -> Bianca/Videos/
+/storage/emulated/0/DCIM/Camera/       -> <backup-root>/Camera/
+/storage/emulated/0/Pictures/          -> <backup-root>/Pictures/
+/storage/emulated/0/Movies/            -> <backup-root>/Videos/
 ```
 
-Do not assume these exact local or remote names. The onboarding flow must let the user adopt existing remote directories or create new directories under `Bianca/`.
+Do not assume these exact local or remote names. First-run onboarding must require the user to enter an existing top-level backup root. The mapping flow must then let the user adopt existing remote directories or create new directories beneath that configured root.
 
 Backup semantics are deliberately one-way and non-destructive:
 
@@ -225,7 +226,7 @@ Before building most UI, complete a vertical technical spike on a real or equiva
 4. Package the executables in the APK without downloading executable code at runtime.
 5. Verify execution from the installed app's native library directory on the Galaxy S23+ target API.
 6. Authenticate on port 23.
-7. Run a harmless rsync dry run against `Bianca/`.
+7. Run a harmless rsync dry run against the explicitly selected test root (`Matteo/` for this development environment).
 8. Capture stdout, stderr, exit code, cancellation, and process death behaviour.
 
 The likely pragmatic packaging approach is to place executable ELF files under `jniLibs/arm64-v8a` with native-library-compatible filenames, enable native library extraction where required, resolve them through `ApplicationInfo.nativeLibraryDir`, and execute them with `ProcessBuilder`. Treat this as an implementation hypothesis that must be proven on-device, not as an unquestioned assumption.
@@ -278,6 +279,7 @@ Fields:
 
 - Username, initially empty and editable.
 - Password, never prefilled or persisted in plaintext.
+- Existing top-level backup folder, initially empty and editable. Accept a trailing slash but persist the normalized name without it. Limit the name to letters, numbers, dot, underscore, and hyphen so it can be passed safely to Hetzner's restricted shell.
 
 Derive the default hostname as `<username>.your-storagebox.de`, while allowing an advanced override.
 
@@ -312,11 +314,11 @@ Use trust-on-first-use for the non-technical default:
 
 ### Step 4: Verify the existing destination
 
-Use a harmless remote list/stat/test to prove that SSH-relative `Bianca/` corresponds to SMB `/backup/Bianca/`.
+Use Hetzner's supported, harmless `ls -d <backup-root>/` command to prove that the user-entered SSH-relative backup root exists. In this development environment, use `Matteo/` for real-device checks.
 
 - Do not create or delete user media for this check.
 - If a temporary marker is necessary, put it in a dedicated `.piffbackup-test` location, verify it through the selected protocol, and remove it immediately.
-- Present `Bianca` as the default backup root.
+- Never prefill or hard-code a backup root.
 
 ### Step 5: Select and map folders
 
@@ -324,9 +326,9 @@ Allow the user to add any number of local roots, one system picker interaction p
 
 For each local root:
 
-- Suggest a matching existing remote directory beneath `Bianca/` by name.
+- Suggest a matching existing remote directory beneath the configured backup root by name.
 - Let the user choose an existing remote directory using a simple remote folder browser.
-- Or let the user create a new subdirectory beneath `Bianca/`.
+- Or let the user create a new subdirectory beneath the configured backup root.
 - Let the user select `Media only — Fast` or `All files — Slower`.
 - Detect overlaps and duplicate remote mappings.
 
@@ -438,7 +440,7 @@ StorageBoxProfile
 - username
 - hostname
 - port
-- remoteBasePath            // default "Bianca/"
+- remoteBasePath            // required normalized user input; no default
 - encryptedCredentialRef
 - pinnedHostKey
 - setupCompleted
@@ -627,7 +629,7 @@ Use generated test datasets at multiple configurable scales. The planning estima
 - Cancellation latency.
 - Resume overhead.
 
-Do not run destructive performance tests against the real `Bianca/` destination.
+Do not run destructive performance tests against any real user destination. Use `Matteo/` only for explicitly scoped development checks and keep connection verification read-only.
 
 ## 16. Delivery phases
 
@@ -637,11 +639,19 @@ Implement in this order:
 2. **Core command engine**: validated mappings, dry run, progress, cancellation, exit codes.
 3. **MediaStore incremental planner**: version/generation checkpoints and `--files-from` generation.
 4. **Room durability**: profiles, mappings, pending jobs, recovery.
-5. **Hetzner onboarding**: password-once key installation, host pinning, `Bianca/` verification.
+5. **Hetzner onboarding**: password-once key installation, host pinning, and read-only verification of the user-entered backup root.
 6. **Initial adoption flow**: remote mapping, dry-run summary, confirmed upload.
 7. **Minimal home/folder/settings UI**.
 8. **UIDT and WorkManager execution**.
 9. **Security, accessibility, localization, performance, and release hardening**.
+
+Current implementation status (2026-08-25): Phases 1–6 are implemented and
+buildable. The first Phase 7 navigation slice is also implemented: successful
+backup is no longer a terminal screen, while the broader home/history/settings
+experience remains. Phases 8–9 remain pending. A user-driven live setup and
+initial upload succeeded on an ARM64 Samsung SM-P610 using the explicit
+`Matteo/` development root; `PERFORMANCE.md` records the observed baseline and
+its limitations. No destructive remote test was performed.
 
 After each phase, keep the project buildable and commit logically grouped changes if Git is available.
 
@@ -653,9 +663,10 @@ The project is done when all of the following are true:
 - The native rsync and SSH tools are reproducibly buildable for `arm64-v8a`.
 - A signed or debug APK installs on a Galaxy S23+.
 - Onboarding connects to `<storage-box-username>.your-storagebox.de:23` without terminal use.
-- The app verifies and uses the existing `Bianca/` destination safely.
+- The app requires, verifies, persists, and uses the existing user-entered backup root safely, without a hard-coded default.
 - The user can configure any number of non-overlapping local roots and map them to remote folders.
 - Initial adoption previews and skips same-path/same-size existing media without deleting anything.
+- After a successful backup, the completion view lets the user check saved mappings for new files, change folders, or change the connection; it is never a terminal screen.
 - Later runs use MediaStore generations and rsync `--files-from` rather than scanning the entire remote collection.
 - The counts discussed in planning are nowhere hardcoded as limits or assumptions.
 - A manual backup continues through supported background APIs, exposes notification progress, and survives interruption through restartable state.

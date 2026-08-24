@@ -1,5 +1,7 @@
 package com.d35p4c1t0.piffbackup.onboarding
 
+import com.d35p4c1t0.piffbackup.backup.RemoteRelativePath
+
 data class StorageBoxEndpoint(
     val username: String,
     val hostname: String,
@@ -33,10 +35,12 @@ data class StorageBoxEndpoint(
 data class OnboardingRequest(
     val profileId: String = DEFAULT_PROFILE_ID,
     val endpoint: StorageBoxEndpoint,
+    val remoteBasePath: RemoteRelativePath,
     val password: CharArray,
 ) {
     init {
         require(PROFILE_ID.matches(profileId)) { "Invalid profile ID" }
+        requireValidStorageBoxBackupRoot(remoteBasePath)
         require(password.isNotEmpty() && password.size <= MAX_PASSWORD_CHARS) { "Invalid password" }
     }
 
@@ -46,6 +50,14 @@ data class OnboardingRequest(
         private val PROFILE_ID = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
     }
 }
+
+internal fun requireValidStorageBoxBackupRoot(remoteBasePath: RemoteRelativePath) {
+    require(STORAGE_BOX_BACKUP_ROOT.matches(remoteBasePath.value)) {
+        "Backup folder must be a safe top-level Storage Box folder"
+    }
+}
+
+private val STORAGE_BOX_BACKUP_ROOT = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,254}")
 
 enum class OnboardingProgress {
     PREPARING_KEY,

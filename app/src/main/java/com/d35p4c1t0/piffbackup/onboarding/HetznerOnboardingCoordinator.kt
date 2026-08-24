@@ -61,7 +61,7 @@ class HetznerOnboardingCoordinator(
 
             onProgress(OnboardingProgress.VERIFYING_KEY_AND_DESTINATION)
             val verification = credentials.withPrivateKey(credential.reference) { privateKey ->
-                destinationVerifier.verify(request.endpoint, privateKey, sshHome)
+                destinationVerifier.verify(request.endpoint, request.remoteBasePath, privateKey, sshHome)
             }
             when (verification) {
                 DestinationVerification.VERIFIED -> Unit
@@ -81,7 +81,7 @@ class HetznerOnboardingCoordinator(
             return OnboardingResult.Success(
                 endpoint = request.endpoint,
                 hostFingerprint = capturedPin.sha256Fingerprint,
-                remoteBasePath = NativeStorageBoxDestinationVerifier.REMOTE_BASE,
+                remoteBasePath = request.remoteBasePath.value,
             )
         } catch (failure: OnboardingFailure) {
             return OnboardingResult.Failure(failure.code)
@@ -102,7 +102,7 @@ class HetznerOnboardingCoordinator(
         username = request.endpoint.username,
         hostname = request.endpoint.hostname,
         port = request.endpoint.port,
-        remoteBasePath = NativeStorageBoxDestinationVerifier.REMOTE_BASE,
+        remoteBasePath = request.remoteBasePath.value,
         encryptedCredentialRef = credentialReference,
         pinnedHostKey = pin.persistedValue,
         setupCompleted = setupCompleted,

@@ -94,6 +94,22 @@
                     android:singleLine="true" />
             </com.google.android.material.textfield.TextInputLayout>
 
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:hint="@string/remote_base_path"
+                app:helperText="@string/remote_base_path_help">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/remote_base_path_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textNoSuggestions"
+                    android:maxLength="255"
+                    android:singleLine="true" />
+            </com.google.android.material.textfield.TextInputLayout>
+
             <com.google.android.material.checkbox.MaterialCheckBox
                 android:id="@+id/advanced_hostname_toggle"
                 android:layout_width="match_parent"
@@ -547,6 +563,32 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:textAppearance="?attr/textAppearanceBodyLarge" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/backup_again_button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:minHeight="48dp"
+                android:text="@string/check_for_new_files" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/complete_change_mappings_button"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:minHeight="48dp"
+                android:text="@string/change_folders" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/complete_change_connection_button"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:minHeight="48dp"
+                android:text="@string/change_connection" />
         </LinearLayout>
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

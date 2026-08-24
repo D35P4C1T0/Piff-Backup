@@ -9,8 +9,8 @@ until an isolated test server is available.
 - Local roots are canonicalized and must remain under the caller-provided
   shared-storage root. Canonicalization rejects traversal and symlink escapes.
 - Remote roots are relative, component-validated paths and must remain under
-  the configured `Bianca/` base. Absolute paths, empty components, `.` and `..`
-  components, NUL, and line breaks are rejected.
+  the configured user-entered base. Absolute paths, empty components, `.` and
+  `..` components, NUL, and line breaks are rejected.
 - Local mappings and remote mappings may not overlap one another.
 - Commands are passed directly to `ProcessBuilder` as argument lists. No shell
   interpolation is used.
@@ -65,8 +65,8 @@ The Phase 2 verification run completed with:
   same-size file is counted as adopted while a new five-byte file is counted for
   upload.
 
-No hostname, credential, network connection, Storage Box path, or real
-`Bianca/` folder was used by this verification.
+No hostname, credential, network connection, Storage Box path, or user backup
+folder was used by this verification.
 
 ## Deferred integration checks
 
@@ -74,6 +74,6 @@ Before any real transfer is exposed, use a dedicated test identity and unique
 disposable destination on an equivalent SSH server to verify authentication,
 host-key mismatch rejection, unreachable-host timeouts, cancellation latency,
 and that no `rsync` or `dbclient` process survives cancellation or app death.
-This is also where the SMB `/backup/Bianca/` to SSH-relative `Bianca/` mapping
-must be confirmed. The real `Bianca/` destination must not be used for these
-tests.
+This is also where the SMB `/backup/<backup-root>/` to SSH-relative
+`<backup-root>/` mapping must be confirmed. A real user destination must not be
+used for destructive tests.

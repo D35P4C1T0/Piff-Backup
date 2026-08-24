@@ -101,6 +101,11 @@ class MainActivity : AppCompatActivity() {
             binding.cancelAdoptionButton.isEnabled = false
             app.initialAdoptionCoordinator.cancel()
         }
+        binding.backupAgainButton.setOnClickListener { checkForNewFiles() }
+        binding.completeChangeMappingsButton.setOnClickListener { showMappingSetup() }
+        binding.completeChangeConnectionButton.setOnClickListener {
+            loadExistingProfile(forceConnect = true)
+        }
     }
 
     private fun loadExistingProfile(forceConnect: Boolean) {
@@ -153,7 +158,16 @@ class MainActivity : AppCompatActivity() {
             showConnectionError(OnboardingErrorCode.INVALID_INPUT)
             return
         }
-        val request = runCatching { OnboardingRequest(endpoint = endpoint, password = password) }.getOrElse {
+        val remoteBasePath = runCatching {
+            RemoteRelativePath.create(binding.remoteBasePathInput.text?.toString()?.trim().orEmpty())
+        }.getOrElse {
+            password.fill('\u0000')
+            showConnectionError(OnboardingErrorCode.INVALID_INPUT)
+            return
+        }
+        val request = runCatching {
+            OnboardingRequest(endpoint = endpoint, remoteBasePath = remoteBasePath, password = password)
+        }.getOrElse {
             password.fill('\u0000')
             showConnectionError(OnboardingErrorCode.INVALID_INPUT)
             return
@@ -188,6 +202,7 @@ class MainActivity : AppCompatActivity() {
         showOnly(binding.connectGroup)
         val username = profile?.username.orEmpty()
         binding.usernameInput.setText(username)
+        binding.remoteBasePathInput.setText(profile?.remoteBasePath.orEmpty())
         val derived = "$username.your-storagebox.de"
         val advanced = profile?.hostname?.takeIf { it != derived }
         binding.advancedHostnameToggle.isChecked = advanced != null
@@ -196,7 +211,7 @@ class MainActivity : AppCompatActivity() {
         binding.connectError.visibility = View.GONE
         binding.openConsoleButton.visibility = View.GONE
         binding.connectStatus.visibility = View.GONE
-        binding.passwordInput.requestFocus()
+        if (username.isEmpty()) binding.usernameInput.requestFocus() else binding.passwordInput.requestFocus()
     }
 
     private fun showConnected(profile: StorageBoxProfileEntity, fingerprint: String) {
@@ -498,6 +513,13 @@ class MainActivity : AppCompatActivity() {
             getString(R.string.initial_backup_complete)
         } else {
             getString(R.string.adoption_complete_format, UserFacingFormat.itemCount(uploadedItems))
+        }
+    }
+
+    private fun checkForNewFiles() {
+        showMappingSetup()
+        if (Environment.isExternalStorageManager() && draftMappings.isNotEmpty()) {
+            beginAdoptionPreview()
         }
     }
 

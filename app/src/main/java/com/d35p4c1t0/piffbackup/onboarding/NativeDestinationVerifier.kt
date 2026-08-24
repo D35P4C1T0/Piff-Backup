@@ -2,6 +2,7 @@ package com.d35p4c1t0.piffbackup.onboarding
 
 import android.content.Context
 import android.util.Log
+import com.d35p4c1t0.piffbackup.backup.RemoteRelativePath
 import com.d35p4c1t0.piffbackup.rsync.NativeProcessRunner
 import com.d35p4c1t0.piffbackup.rsync.NativeProcessResult
 import com.d35p4c1t0.piffbackup.rsync.NativeTool
@@ -12,7 +13,15 @@ import java.io.File
 
 object StorageBoxVerificationCommands {
     val AUTHENTICATION_CHECK = listOf("pwd")
-    val DESTINATION_CHECK = listOf("ls", "-d", "Bianca/")
+
+    fun destinationCheck(remoteBasePath: RemoteRelativePath): List<String> {
+        requireValidStorageBoxBackupRoot(remoteBasePath)
+        return listOf(
+            "ls",
+            "-d",
+            remoteBasePath.pathWithTrailingSlash,
+        )
+    }
 }
 
 enum class DestinationVerification {
@@ -25,6 +34,7 @@ enum class DestinationVerification {
 fun interface StorageBoxDestinationVerifier {
     fun verify(
         endpoint: StorageBoxEndpoint,
+        remoteBasePath: RemoteRelativePath,
         privateKey: File,
         sshHomeDirectory: File,
     ): DestinationVerification
@@ -38,6 +48,7 @@ class NativeStorageBoxDestinationVerifier(
 
     override fun verify(
         endpoint: StorageBoxEndpoint,
+        remoteBasePath: RemoteRelativePath,
         privateKey: File,
         sshHomeDirectory: File,
     ): DestinationVerification {
@@ -54,7 +65,7 @@ class NativeStorageBoxDestinationVerifier(
             logSafeFailure("authentication", authentication, config)
             return DestinationVerification.KEY_AUTHENTICATION_FAILED
         }
-        val destination = run(config, StorageBoxVerificationCommands.DESTINATION_CHECK)
+        val destination = run(config, StorageBoxVerificationCommands.destinationCheck(remoteBasePath))
         if (destination.timedOut) return DestinationVerification.TIMED_OUT
         if (destination.exitCode != 0 || destination.cancelled) {
             logSafeFailure("destination", destination, config)
@@ -86,7 +97,6 @@ class NativeStorageBoxDestinationVerifier(
     }
 
     companion object {
-        const val REMOTE_BASE = "Bianca"
         const val LOG_TAG = "PiffBackupNativeSsh"
         private const val COMMAND_TIMEOUT_MILLIS = 30_000L
     }

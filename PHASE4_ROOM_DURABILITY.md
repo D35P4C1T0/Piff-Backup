@@ -68,7 +68,7 @@ The Phase 4 verification run completed with:
 
 All durability tests use unique databases and files beneath app-private cache.
 They do not query personal media, open a network connection, or name, inspect,
-or modify the real `Bianca/` destination.
+or modify a real user destination.
 
 ## Deferred to later phases
 

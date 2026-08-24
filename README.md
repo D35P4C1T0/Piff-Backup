@@ -3,16 +3,18 @@
 PiffBackup is an Android 13+ one-way media backup app for a private Hetzner
 Storage Box. Development follows `reference/PROJECT.MD` phase by phase.
 
-Current status: Phase 6 initial adoption. The project builds a single
-`arm64-v8a` APK, includes reproducibly built rsync and strict SSH tools, turns
-bounded MediaStore generation changes into streamed NUL-delimited file lists,
-and persists immutable pending work and checkpoints across process death. The
-app now performs password-once SSH key installation, Android Keystore-backed
-credential protection, strict host-key pinning, and a read-only `Bianca/`
-existence check. Users can now choose non-overlapping local folders, browse or
-choose remote folders beneath `Bianca/`, preview the existing collection with
-actual rsync, and explicitly confirm the initial one-way upload. Normal home
-screens and background execution are not enabled yet.
+Current status: Phases 1–6 are complete, and the first Phase 7 navigation slice
+is implemented. The project builds a single `arm64-v8a` APK, includes
+reproducibly built rsync and strict SSH tools, turns bounded MediaStore
+generation changes into streamed NUL-delimited file lists, and persists
+immutable pending work and checkpoints across process death. The app performs
+password-once SSH key installation, Android Keystore-backed credential
+protection, strict host-key pinning, and read-only verification of the backup
+root explicitly entered by the user. Users can choose non-overlapping local
+folders, map them beneath that root, preview the existing collection with
+actual rsync, and explicitly confirm the initial one-way upload. After success
+they can check the saved mappings again, change folders, or change the
+connection. The broader home/history UI and background execution remain.
 
 ## Build
 
@@ -43,19 +45,20 @@ See `tools/native/README.md` for native reproduction,
 verification are recorded in `PHASE3_MEDIASTORE_PLANNER.md`; Room schema and
 recovery semantics are recorded in `PHASE4_ROOM_DURABILITY.md`. See
 `PHASE5_HETZNER_ONBOARDING.md` for onboarding security, harmless verification,
-and the remaining device/live-account validation. Phase 6 storage access,
-mapping, preview, confirmation, and interruption semantics are recorded in
-`PHASE6_INITIAL_ADOPTION.md`.
+and live-device validation. Phase 6 storage access, mapping, preview,
+confirmation, interruption, and completion navigation are recorded in
+`PHASE6_INITIAL_ADOPTION.md`. The first real transfer measurement and its
+limitations are recorded in `PERFORMANCE.md`.
 
 ## Safety and privacy
 
 Automated host and device tests are intentionally local-only. Phase 5's live
-onboarding check uses fixed read-only commands. Phase 6 adoption starts with an
-rsync dry run and cannot upload until the user reviews the calculated summary
-and presses `Start backup`; no code path enables remote deletion. Never run
-deletion or performance fixtures against the real `Bianca/` destination.
-Remote development tests that need disposable writes must use an isolated
-`.piffbackup-test/` path on an equivalent server.
+onboarding check uses only bounded read-only commands against the root entered
+by the user. Phase 6 adoption starts with an rsync dry run and cannot upload
+until the user reviews the calculated summary and presses `Start backup`; no
+code path enables remote deletion. Never run destructive tests or generated
+performance fixtures against a real user destination. `Matteo/` is the
+explicit development test root for this environment, not a product default.
 
 Do not commit passwords, private keys, host keys, live connection files, or
 personal filenames. Android backup of app-private data is disabled.

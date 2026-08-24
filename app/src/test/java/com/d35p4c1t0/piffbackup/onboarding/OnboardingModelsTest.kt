@@ -1,5 +1,6 @@
 package com.d35p4c1t0.piffbackup.onboarding
 
+import com.d35p4c1t0.piffbackup.backup.RemoteRelativePath
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
@@ -26,5 +27,31 @@ class OnboardingModelsTest {
         assertThrows(IllegalArgumentException::class.java) { StorageBoxEndpoint.create("u123456", "box..example") }
         assertThrows(IllegalArgumentException::class.java) { StorageBoxEndpoint.create("u123456", "-box.example") }
         assertThrows(IllegalArgumentException::class.java) { StorageBoxEndpoint("u123456", "box.example", 22) }
+    }
+
+    @Test
+    fun `requires an explicit top level backup folder`() {
+        val endpoint = StorageBoxEndpoint.create("u123456", null)
+        val request = OnboardingRequest(
+            endpoint = endpoint,
+            remoteBasePath = RemoteRelativePath.create("Matteo/"),
+            password = "secret".toCharArray(),
+        )
+
+        assertEquals("Matteo", request.remoteBasePath.value)
+        assertThrows(IllegalArgumentException::class.java) {
+            OnboardingRequest(
+                endpoint = endpoint,
+                remoteBasePath = RemoteRelativePath.create("parent/child"),
+                password = "secret".toCharArray(),
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            OnboardingRequest(
+                endpoint = endpoint,
+                remoteBasePath = RemoteRelativePath.create("Matteo;touch"),
+                password = "secret".toCharArray(),
+            )
+        }
     }
 }

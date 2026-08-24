@@ -6,6 +6,8 @@
     <string name="connect_explanation">Enter your Storage Box password once. PiffBackup will install a dedicated key, then erase the password without saving it.</string>
     <string name="storage_box_username">Username</string>
     <string name="storage_box_password">Password</string>
+    <string name="remote_base_path">Backup folder</string>
+    <string name="remote_base_path_help">Existing top-level folder, using letters, numbers, dot, underscore, or hyphen</string>
     <string name="use_different_server">Use a different server address</string>
     <string name="server_address">Server address</string>
     <string name="ssh_port_explanation">Secure backup connection on port 23</string>
@@ -21,13 +23,13 @@
     <string name="progress_installing_key">Installing the dedicated key…</string>
     <string name="progress_verifying">Verifying the key and existing backup folder…</string>
     <string name="progress_saving">Saving the protected connection…</string>
-    <string name="error_invalid_input">Check the username, server address, and password.</string>
+    <string name="error_invalid_input">Check the username, server address, backup folder, and password.</string>
     <string name="error_network">Couldn’t reach the Storage Box. In Hetzner Console, enable SSH Support and External Reachability, wait a few minutes, then retry.</string>
     <string name="error_authentication">The Storage Box rejected that username or password. Check them and retry.</string>
     <string name="error_host_changed">The server identity changed. PiffBackup stopped to protect your backup. Verify the fingerprint in Hetzner Console before changing this connection.</string>
     <string name="error_key_install">The password worked, but the dedicated key could not be installed. Retry after confirming SSH Support is enabled.</string>
     <string name="error_key_verify">The dedicated key could not reconnect securely. No backup was started.</string>
-    <string name="error_destination_missing">Connected securely, but the existing Bianca folder was not found. Nothing was created or changed.</string>
+    <string name="error_destination_missing">Connected securely, but the selected backup folder was not found. Nothing was created or changed.</string>
     <string name="error_secure_storage">The protected connection could not be saved on this device. No backup was started.</string>
     <string name="choose_backup_folders">Choose backup folders</string>
     <string name="all_files_access_explanation">PiffBackup needs access to files you choose so its backup tool can read them directly. It cannot open other apps’ private data.</string>
@@ -63,7 +65,8 @@
     <string name="cancel_backup">Cancel</string>
     <string name="everything_backed_up">Everything is backed up</string>
     <string name="adoption_complete_format">%1$s items were uploaded successfully.</string>
-    <string name="initial_backup_complete">The existing folders were adopted successfully. Later backups will check only new or changed items.</string>
+    <string name="initial_backup_complete">The existing folders were adopted successfully. Check for new files whenever you want to run another backup.</string>
+    <string name="check_for_new_files">Check for new files</string>
     <string name="adoption_error_invalid">Check the selected phone and Storage Box folders. Folders cannot overlap.</string>
     <string name="adoption_error_permission">Allow folder access before checking the backup.</string>
     <string name="adoption_error_preview">The existing backup could not be checked safely. Nothing was uploaded.</string>

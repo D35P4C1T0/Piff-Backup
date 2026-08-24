@@ -1,5 +1,6 @@
 package com.d35p4c1t0.piffbackup.onboarding
 
+import com.d35p4c1t0.piffbackup.backup.RemoteRelativePath
 import com.d35p4c1t0.piffbackup.data.StorageBoxProfileEntity
 import com.d35p4c1t0.piffbackup.data.StorageBoxProfileInput
 import kotlinx.coroutines.runBlocking
@@ -17,7 +18,7 @@ class HetznerOnboardingCoordinatorTest {
         val password = "secret".toCharArray()
 
         val result = fixture.coordinator.onboard(
-            OnboardingRequest(endpoint = ENDPOINT, password = password),
+            OnboardingRequest(endpoint = ENDPOINT, remoteBasePath = TEST_REMOTE_BASE, password = password),
             fixture.progress::add,
         )
 
@@ -28,7 +29,8 @@ class HetznerOnboardingCoordinatorTest {
         assertTrue(fixture.profiles.saved.last().setupCompleted)
         assertEquals("keystore:v1:primary", fixture.profiles.saved.last().encryptedCredentialRef)
         assertEquals(PIN.persistedValue, fixture.profiles.saved.last().pinnedHostKey)
-        assertEquals("Bianca", fixture.profiles.saved.last().remoteBasePath)
+        assertEquals("Matteo", fixture.profiles.saved.last().remoteBasePath)
+        assertEquals(TEST_REMOTE_BASE.value, fixture.verifier.remoteBasePath?.value)
         assertTrue(OnboardingProgress.VERIFYING_KEY_AND_DESTINATION in fixture.progress)
     }
 
@@ -37,7 +39,11 @@ class HetznerOnboardingCoordinatorTest {
         val fixture = Fixture(DestinationVerification.DESTINATION_NOT_FOUND)
 
         val result = fixture.coordinator.onboard(
-            OnboardingRequest(endpoint = ENDPOINT, password = "secret".toCharArray()),
+            OnboardingRequest(
+                endpoint = ENDPOINT,
+                remoteBasePath = TEST_REMOTE_BASE,
+                password = "secret".toCharArray(),
+            ),
         )
 
         assertEquals(
@@ -56,6 +62,7 @@ class HetznerOnboardingCoordinatorTest {
                 id = "primary",
                 username = ENDPOINT.username,
                 hostname = ENDPOINT.hostname,
+                remoteBasePath = TEST_REMOTE_BASE.value,
                 pinnedHostKey = PIN.persistedValue,
                 encryptedCredentialRef = "keystore:v1:primary",
                 setupCompleted = true,
@@ -63,7 +70,11 @@ class HetznerOnboardingCoordinatorTest {
         )
 
         fixture.coordinator.onboard(
-            OnboardingRequest(endpoint = ENDPOINT, password = "secret".toCharArray()),
+            OnboardingRequest(
+                endpoint = ENDPOINT,
+                remoteBasePath = TEST_REMOTE_BASE,
+                password = "secret".toCharArray(),
+            ),
         )
 
         assertTrue(requireNotNull(fixture.installer.expectedPin).securelyMatches(PIN))
@@ -77,6 +88,7 @@ class HetznerOnboardingCoordinatorTest {
                 id = "primary",
                 username = ENDPOINT.username,
                 hostname = ENDPOINT.hostname,
+                remoteBasePath = TEST_REMOTE_BASE.value,
                 pinnedHostKey = "not-a-valid-pin",
                 encryptedCredentialRef = "keystore:v1:primary",
                 setupCompleted = true,
@@ -84,7 +96,11 @@ class HetznerOnboardingCoordinatorTest {
         )
 
         val result = fixture.coordinator.onboard(
-            OnboardingRequest(endpoint = ENDPOINT, password = "secret".toCharArray()),
+            OnboardingRequest(
+                endpoint = ENDPOINT,
+                remoteBasePath = TEST_REMOTE_BASE,
+                password = "secret".toCharArray(),
+            ),
         )
 
         assertEquals(OnboardingResult.Failure(OnboardingErrorCode.HOST_KEY_CHANGED), result)
@@ -95,14 +111,31 @@ class HetznerOnboardingCoordinatorTest {
     private class Fixture(verification: DestinationVerification) {
         val profiles = FakeProfiles()
         val installer = FakeInstaller()
+        val verifier = FakeDestinationVerifier(verification)
         val progress = mutableListOf<OnboardingProgress>()
         val coordinator = HetznerOnboardingCoordinator(
             profiles = profiles,
             credentials = FakeCredentials(),
             passwordInstaller = installer,
             knownHosts = KnownHostWriter { _, _, _ -> WORK_DIRECTORY },
-            destinationVerifier = StorageBoxDestinationVerifier { _, _, _ -> verification },
+            destinationVerifier = verifier,
         )
+    }
+
+    private class FakeDestinationVerifier(
+        private val result: DestinationVerification,
+    ) : StorageBoxDestinationVerifier {
+        var remoteBasePath: RemoteRelativePath? = null
+
+        override fun verify(
+            endpoint: StorageBoxEndpoint,
+            remoteBasePath: RemoteRelativePath,
+            privateKey: File,
+            sshHomeDirectory: File,
+        ): DestinationVerification {
+            this.remoteBasePath = remoteBasePath
+            return result
+        }
     }
 
     private class FakeProfiles : OnboardingProfileStore {
@@ -161,6 +194,7 @@ class HetznerOnboardingCoordinatorTest {
 
     private companion object {
         val ENDPOINT = StorageBoxEndpoint("u123456", "u123456.your-storagebox.de")
+        val TEST_REMOTE_BASE = RemoteRelativePath.create("Matteo")
         val PIN = HostKeyPin.parse("ssh-ed25519 AQID")
         val WORK_DIRECTORY: File = File(requireNotNull(System.getProperty("java.io.tmpdir")))
         val WORK_KEY: File = Files.createTempFile("piffbackup-fake-key", ".tmp").toFile()

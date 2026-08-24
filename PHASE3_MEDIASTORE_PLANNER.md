@@ -72,7 +72,7 @@ The Phase 3 verification run completed with:
   unlisted file remained untouched.
 
 The device test did not query the owner's MediaStore, request media access,
-contact a server, or name or modify the real `Bianca/` destination.
+contact a server, or name or modify a real user destination.
 
 ## Deferred to later phases
 

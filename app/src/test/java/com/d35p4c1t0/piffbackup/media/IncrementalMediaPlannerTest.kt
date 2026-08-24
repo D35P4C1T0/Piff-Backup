@@ -16,8 +16,8 @@ import java.nio.file.Files
 class IncrementalMediaPlannerTest {
     private val volume = Files.createTempDirectory("piffbackup-planner-volume").toFile()
     private val fileLists = Files.createTempDirectory("piffbackup-file-lists").toFile()
-    private val camera = mediaMapping("DCIM/Camera", "Bianca/Camera")
-    private val videos = mediaMapping("Movies", "Bianca/Videos")
+    private val camera = mediaMapping("DCIM/Camera", "Matteo/Camera")
+    private val videos = mediaMapping("Movies", "Matteo/Videos")
     private val checkpoint = MediaStoreCheckpoint("external_primary", "v1", 10L)
 
     @Test
@@ -112,7 +112,7 @@ class IncrementalMediaPlannerTest {
     private fun planner(source: MediaStoreSource) = IncrementalMediaPlanner(
         source = source,
         fileListStore = IncrementalFileListStore(fileLists),
-        requiredRemoteBase = RemoteRelativePath.create("Bianca"),
+        requiredRemoteBase = RemoteRelativePath.create("Matteo"),
     )
 
     private fun mediaMapping(local: String, remote: String): MediaStoreMapping {
