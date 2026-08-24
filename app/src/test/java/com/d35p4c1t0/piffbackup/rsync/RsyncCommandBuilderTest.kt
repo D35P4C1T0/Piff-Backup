@@ -84,6 +84,7 @@ class RsyncCommandBuilderTest {
             mapping = MediaStoreMapping.create(mapping, shared),
             fileList = fileList,
             itemCount = 1L,
+            totalBytes = 1L,
         )
 
         val command = builder.incrementalTransfer(transfer, ssh)
@@ -108,6 +109,7 @@ class RsyncCommandBuilderTest {
                 mapping = MediaStoreMapping.create(mapping, shared),
                 fileList = empty,
                 itemCount = 1L,
+                totalBytes = 0L,
             )
         }
     }

@@ -43,10 +43,12 @@ data class PlannedMediaTransfer(
     val mapping: MediaStoreMapping,
     val fileList: java.io.File,
     val itemCount: Long,
+    val totalBytes: Long,
 ) {
     init {
         require(itemCount > 0L) { "A planned transfer must contain at least one item" }
         require(fileList.isFile && fileList.length() > 0L) { "A planned file list must not be empty" }
+        require(totalBytes >= 0L) { "Planned bytes must not be negative" }
     }
 }
 
@@ -81,7 +83,7 @@ class IncrementalMediaPlanner(
         if (window.afterExclusive == window.throughInclusive || mappings.isEmpty()) {
             return MediaPlanningResult.Incremental(snapshot, window, emptyList())
         }
-        val writers = MutableList<NulDelimitedFileListWriter?>(mappings.size) { null }
+        val roots = MutableList<RootAccumulator?>(mappings.size) { null }
         try {
             source.forEachChangedMedia(snapshot.volumeName, window) { row ->
                 if (!row.changedWithin(window)) return@forEachChangedMedia
@@ -94,25 +96,37 @@ class IncrementalMediaPlanner(
                     matchedPath = relativePath
                 }
                 val index = matchedIndex ?: return@forEachChangedMedia
-                val writer = writers[index] ?: fileListStore.openWriter().also { writers[index] = it }
-                writer.append(requireNotNull(matchedPath))
+                val root = roots[index] ?: RootAccumulator(fileListStore.openWriter()).also { roots[index] = it }
+                root.writer.append(requireNotNull(matchedPath))
+                root.totalBytes = root.totalBytes.checkedAdd(row.sizeBytes)
             }
-            writers.filterNotNull().forEach { it.close() }
-            val transfers = writers.mapIndexedNotNull { index, writer ->
-                writer?.let {
+            roots.filterNotNull().forEach { it.writer.close() }
+            val transfers = roots.mapIndexedNotNull { index, root ->
+                root?.let {
                     PlannedMediaTransfer(
                         mapping = mappings[index],
-                        fileList = it.file,
-                        itemCount = it.itemCount,
+                        fileList = it.writer.file,
+                        itemCount = it.writer.itemCount,
+                        totalBytes = it.totalBytes,
                     )
                 }
             }
             return MediaPlanningResult.Incremental(snapshot, window, transfers)
         } catch (exception: Exception) {
-            writers.filterNotNull().forEach { writer ->
-                runCatching { writer.delete() }
+            roots.filterNotNull().forEach { root ->
+                runCatching { root.writer.delete() }
             }
             throw exception
         }
+    }
+
+    private data class RootAccumulator(
+        val writer: NulDelimitedFileListWriter,
+        var totalBytes: Long = 0L,
+    )
+
+    private fun Long.checkedAdd(value: Long): Long {
+        require(value >= 0L && this <= Long.MAX_VALUE - value) { "Planned byte count overflow" }
+        return this + value
     }
 }

@@ -65,5 +65,6 @@ class MediaStoreMappingTest {
         displayName = displayName,
         generationAdded = 11L,
         generationModified = 0L,
+        sizeBytes = 1L,
     )
 }

@@ -16,10 +16,12 @@ data class MediaStoreRow(
     val displayName: String,
     val generationAdded: Long,
     val generationModified: Long,
+    val sizeBytes: Long,
 ) {
     init {
         require(generationAdded >= 0L) { "Added generation must not be negative" }
         require(generationModified >= 0L) { "Modified generation must not be negative" }
+        require(sizeBytes >= 0L) { "Media size must not be negative" }
     }
 
     fun changedWithin(window: MediaGenerationWindow): Boolean =
@@ -65,6 +67,7 @@ class AndroidMediaStoreSource(
             MediaStore.MediaColumns.DISPLAY_NAME,
             MediaStore.MediaColumns.GENERATION_ADDED,
             MediaStore.MediaColumns.GENERATION_MODIFIED,
+            MediaStore.MediaColumns.SIZE,
         )
         val selection = buildString {
             append("${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (?, ?) AND (")
@@ -96,6 +99,7 @@ class AndroidMediaStoreSource(
             val displayNameColumn = it.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
             val addedColumn = it.getColumnIndexOrThrow(MediaStore.MediaColumns.GENERATION_ADDED)
             val modifiedColumn = it.getColumnIndexOrThrow(MediaStore.MediaColumns.GENERATION_MODIFIED)
+            val sizeColumn = it.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
             while (it.moveToNext()) {
                 val kind = when (it.getInt(mediaTypeColumn)) {
                     MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE -> MediaKind.IMAGE
@@ -111,6 +115,7 @@ class AndroidMediaStoreSource(
                         displayName = displayName,
                         generationAdded = it.getLong(addedColumn),
                         generationModified = it.getLong(modifiedColumn),
+                        sizeBytes = it.getLong(sizeColumn).coerceAtLeast(0L),
                     ),
                 )
             }

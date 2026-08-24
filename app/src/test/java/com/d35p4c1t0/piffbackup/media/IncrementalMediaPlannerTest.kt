@@ -48,6 +48,8 @@ class IncrementalMediaPlannerTest {
         assertEquals(listOf("family's clip.mp4"), decode(result.transfers[1].fileList))
         assertEquals(2L, result.transfers[0].itemCount)
         assertEquals(1L, result.transfers[1].itemCount)
+        assertEquals(2L, result.transfers[0].totalBytes)
+        assertEquals(1L, result.transfers[1].totalBytes)
         assertEquals(MediaStoreCheckpoint("external_primary", "v1", 20L), result.proposedCheckpoint)
         assertEquals(
             result.proposedCheckpoint,
@@ -130,7 +132,7 @@ class IncrementalMediaPlannerTest {
         displayName: String,
         added: Long = 0L,
         modified: Long = 0L,
-    ) = MediaStoreRow(kind, relativePath, displayName, added, modified)
+    ) = MediaStoreRow(kind, relativePath, displayName, added, modified, sizeBytes = 1L)
 
     private fun decode(file: File): List<String> {
         val bytes = file.readBytes()
