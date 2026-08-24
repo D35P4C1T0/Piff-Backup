@@ -70,10 +70,10 @@ not claimed as passed.
 7. Verify no child `rsync` or `dbclient` remains after cancellation/process kill,
    and verify the disposable destination contains no deletions.
 
-## Known limitation before Phase 2
+## Remaining native integration limitation
 
 `Process.destroy()` is the current cancellation hypothesis. Rsync normally
 terminates its remote-shell child, but Android process-tree behavior must be
-observed on the target device. If a child survives, Phase 2 must replace the
-launcher with a small supported JNI process-group supervisor before any real
-backup transfer is enabled.
+observed on the target device against an isolated test server. If a child
+survives, the launcher must be replaced with a small supported JNI process-group
+supervisor before any real backup transfer is enabled.

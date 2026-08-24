@@ -22,6 +22,7 @@ object StrictSshCommand {
         require(config.sshHomeDirectory.isAbsolute) { "SSH home must be absolute" }
         return listOf(
             "-p", config.port.toString(),
+            "-I", "60",
             "-i", config.identityFile.path,
             "-o", "StrictHostKeyChecking=yes",
             "-o", "BatchMode=yes",

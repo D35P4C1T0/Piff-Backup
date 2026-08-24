@@ -28,6 +28,7 @@ class NativeProcessRunner(
         command: List<String>,
         workingDirectory: File,
         environment: Map<String, String> = emptyMap(),
+        onStdoutChunk: ((String) -> Unit)? = null,
     ): RunningNativeProcess {
         require(command.isNotEmpty()) { "command must not be empty" }
         require(command.none { '\u0000' in it }) { "command arguments must not contain NUL" }
@@ -38,7 +39,7 @@ class NativeProcessRunner(
             .redirectErrorStream(false)
         builder.environment().putAll(environment)
         val process = builder.start()
-        return RunningNativeProcess(process, captureLimitBytes)
+        return RunningNativeProcess(process, captureLimitBytes, onStdoutChunk)
     }
 
     companion object {
@@ -49,10 +50,16 @@ class NativeProcessRunner(
 class RunningNativeProcess internal constructor(
     private val process: Process,
     captureLimitBytes: Int,
+    onStdoutChunk: ((String) -> Unit)?,
 ) {
     private val startedAtNanos = System.nanoTime()
     private val cancellationRequested = AtomicBoolean(false)
-    private val stdoutCapture = BoundedStreamCapture(process.inputStream, captureLimitBytes, "piffbackup-stdout")
+    private val stdoutCapture = BoundedStreamCapture(
+        input = process.inputStream,
+        limit = captureLimitBytes,
+        threadName = "piffbackup-stdout",
+        observer = onStdoutChunk,
+    )
     private val stderrCapture = BoundedStreamCapture(process.errorStream, captureLimitBytes, "piffbackup-stderr")
 
     init {
@@ -92,6 +99,7 @@ private class BoundedStreamCapture(
     private val input: InputStream,
     private val limit: Int,
     threadName: String,
+    private val observer: ((String) -> Unit)? = null,
 ) {
     private val output = ByteArrayOutputStream(minOf(limit, 8 * 1024))
     private val thread = Thread({ drain() }, threadName).apply { isDaemon = true }
@@ -111,6 +119,7 @@ private class BoundedStreamCapture(
             while (true) {
                 val count = stream.read(buffer)
                 if (count < 0) return
+                observer?.invoke(String(buffer, 0, count, StandardCharsets.UTF_8))
                 val remaining = limit - output.size()
                 if (remaining > 0) output.write(buffer, 0, minOf(count, remaining))
                 if (count > remaining.coerceAtLeast(0)) truncated = true

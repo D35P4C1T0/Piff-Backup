@@ -1,0 +1,83 @@
+package com.d35p4c1t0.piffbackup.backup
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
+import org.junit.Test
+import java.io.File
+import java.nio.file.Files
+
+class BackupMappingTest {
+    @Test
+    fun `canonicalizes local roots and preserves source trailing slash`() {
+        val shared = Files.createTempDirectory("piffbackup-shared").toFile()
+        val nested = File(shared, "Pictures/../DCIM/Camera")
+
+        val root = CanonicalLocalRoot.create(nested.path, shared)
+
+        assertEquals(File(shared, "DCIM/Camera").canonicalPath + "/", root.pathWithTrailingSlash)
+    }
+
+    @Test
+    fun `rejects local traversal and symlink escape`() {
+        val parent = Files.createTempDirectory("piffbackup-roots").toFile()
+        val shared = File(parent, "shared").apply { mkdirs() }
+        val outside = File(parent, "outside").apply { mkdirs() }
+
+        assertThrows(IllegalArgumentException::class.java) {
+            CanonicalLocalRoot.create("shared/Pictures", shared)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            CanonicalLocalRoot.create(File(shared, "../outside").path, shared)
+        }
+
+        val link = File(shared, "link")
+        Files.createSymbolicLink(link.toPath(), outside.toPath())
+        assertThrows(IllegalArgumentException::class.java) {
+            CanonicalLocalRoot.create(link.path, shared)
+        }
+    }
+
+    @Test
+    fun `remote path accepts ordinary unicode but rejects unsafe components`() {
+        assertEquals(
+            "Bianca/Family's album 😄/",
+            RemoteRelativePath.create("Bianca/Family's album 😄/").pathWithTrailingSlash,
+        )
+        listOf("/Bianca/Camera", "Bianca/../Other", "Bianca//Camera", "Bianca/./Camera", "Bianca/a\nb").forEach {
+            assertThrows(IllegalArgumentException::class.java) { RemoteRelativePath.create(it) }
+        }
+    }
+
+    @Test
+    fun `rejects local overlap remote overlap and paths outside Bianca`() {
+        val shared = Files.createTempDirectory("piffbackup-overlap").toFile()
+        val bianca = RemoteRelativePath.create("Bianca")
+        val pictures = BackupMapping(
+            CanonicalLocalRoot.create(File(shared, "Pictures").path, shared),
+            RemoteRelativePath.create("Bianca/Pictures"),
+        )
+        val screenshots = BackupMapping(
+            CanonicalLocalRoot.create(File(shared, "Pictures/Screenshots").path, shared),
+            RemoteRelativePath.create("Bianca/Screenshots"),
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            BackupMappingValidator.validate(listOf(pictures, screenshots), bianca)
+        }
+
+        val camera = BackupMapping(
+            CanonicalLocalRoot.create(File(shared, "DCIM/Camera").path, shared),
+            RemoteRelativePath.create("Bianca/Pictures/Camera"),
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            BackupMappingValidator.validate(listOf(pictures, camera), bianca)
+        }
+
+        val outside = BackupMapping(
+            CanonicalLocalRoot.create(File(shared, "Movies").path, shared),
+            RemoteRelativePath.create("NotBianca/Movies"),
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            BackupMappingValidator.validate(listOf(outside), bianca)
+        }
+    }
+}

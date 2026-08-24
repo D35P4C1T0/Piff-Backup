@@ -3,9 +3,11 @@
 PiffBackup is an Android 13+ one-way media backup app for a private Hetzner
 Storage Box. Development follows `reference/PROJECT.MD` phase by phase.
 
-Current status: Phase 1 native feasibility spike. The project builds a single
-`arm64-v8a` APK and includes reproducibly built rsync and strict SSH tools. No
-real backup, onboarding, or Storage Box credential flow is enabled yet.
+Current status: Phase 2 core command engine. The project builds a single
+`arm64-v8a` APK, includes reproducibly built rsync and strict SSH tools, and has
+validated non-destructive adoption-preview/transfer commands with progress,
+cancellation, and exit classification. No real backup, onboarding, or Storage
+Box credential flow is enabled yet.
 
 ## Build
 
@@ -30,16 +32,17 @@ bundled runtime for that invocation:
 JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew assembleDebug
 ```
 
-See `tools/native/README.md` for native reproduction and
-`PHASE1_NATIVE_SPIKE.md` for device verification, evidence, safety limits, and
-remaining checks.
+See `tools/native/README.md` for native reproduction,
+`PHASE1_NATIVE_SPIKE.md` for native feasibility evidence, and
+`PHASE2_COMMAND_ENGINE.md` for command-engine semantics and verification.
 
 ## Safety and privacy
 
-The current in-app check is intentionally local-only and cannot connect to the
-Storage Box. Never run tests or performance fixtures against the real
-`Bianca/` destination. Remote development tests must use an isolated,
-disposable `.piffbackup-test/` path on an equivalent server.
+The current in-app check and automated tests are intentionally local-only. The
+command engine is not connected to UI credentials or mappings yet. Never run
+tests or performance fixtures against the real `Bianca/` destination. Remote
+development tests must use an isolated, disposable `.piffbackup-test/` path on
+an equivalent server.
 
 Do not commit passwords, private keys, host keys, live connection files, or
 personal filenames. Android backup of app-private data is disabled.
