@@ -49,6 +49,54 @@ class DurableBackupStore(
         )
     }
 
+    suspend fun completeInitialAdoption(
+        runId: String,
+        profileId: String,
+        configurationRevision: Long,
+        checkpoint: MediaStoreCheckpoint,
+        startedAtEpochMillis: Long,
+        discoveredFiles: Long,
+        uploadedFiles: Long,
+        uploadedBytes: Long,
+    ): MediaCheckpointEntity = database.withWriteTransaction {
+        require(runId.isNotBlank() && '\u0000' !in runId) { "Invalid adoption run ID" }
+        require(startedAtEpochMillis >= 0L) { "Invalid adoption start time" }
+        require(discoveredFiles >= 0L && uploadedFiles in 0..discoveredFiles && uploadedBytes >= 0L) {
+            "Invalid adoption totals"
+        }
+        require(dao.activeJobs(profileId).isEmpty()) { "Adoption cannot complete while work is pending" }
+        require(dao.backupRun(runId) == null) { "Adoption run already exists" }
+        val profile = requireNotNull(dao.profile(profileId)) { "Profile does not exist" }
+        require(profile.configurationRevision == configurationRevision) {
+            "Profile configuration changed during adoption"
+        }
+        require(dao.mappings(profileId).any { it.enabled }) { "Adoption requires an enabled mapping" }
+        val now = checkedNow()
+        val entity = MediaCheckpointEntity(
+            profileId = profileId,
+            volumeName = checkpoint.volumeName,
+            mediaStoreVersion = checkpoint.version,
+            successfulGeneration = checkpoint.successfulGeneration,
+            configurationRevision = configurationRevision,
+            updatedAtEpochMillis = now,
+        )
+        dao.upsertCheckpoint(entity)
+        dao.insertBackupRun(
+            BackupRunEntity(
+                id = runId,
+                profileId = profileId,
+                startedAtEpochMillis = startedAtEpochMillis,
+                finishedAtEpochMillis = now,
+                result = BackupRunResultValue.SUCCEEDED,
+                discoveredFiles = discoveredFiles,
+                uploadedFiles = uploadedFiles,
+                uploadedBytes = uploadedBytes,
+                sanitizedErrorCode = null,
+            ),
+        )
+        entity
+    }
+
     suspend fun persistIncrementalPlan(
         jobId: String,
         profileId: String,

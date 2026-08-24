@@ -3,6 +3,7 @@ package com.d35p4c1t0.piffbackup.media
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Environment
 import android.provider.MediaStore
 
 enum class MediaKind {
@@ -123,6 +124,8 @@ class AndroidMediaStoreSource(
     }
 
     private fun mediaAccessScope(): MediaAccessScope {
+        if (Environment.isExternalStorageManager()) return MediaAccessScope.FULL
+
         fun granted(permission: String): Boolean =
             context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
 

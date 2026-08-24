@@ -24,6 +24,23 @@ class IncrementalFileListStore(
         return NulDelimitedFileListWriter(file)
     }
 
+    fun cleanupExactTemporaryLists(): Int {
+        var deleted = 0
+        directory.listFiles().orEmpty().forEach { candidate ->
+            val canonical = runCatching { candidate.canonicalFile }.getOrNull() ?: return@forEach
+            if (
+                canonical.parentFile == directory &&
+                canonical.name.startsWith("piffbackup-") &&
+                canonical.name.endsWith(".from0") &&
+                canonical.isFile &&
+                canonical.delete()
+            ) {
+                deleted++
+            }
+        }
+        return deleted
+    }
+
     companion object {
         fun inAppPrivateStorage(context: Context): IncrementalFileListStore =
             IncrementalFileListStore(File(context.noBackupFilesDir, "incremental-file-lists"))

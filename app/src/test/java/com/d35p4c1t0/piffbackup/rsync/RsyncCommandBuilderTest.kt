@@ -76,6 +76,24 @@ class RsyncCommandBuilderTest {
     }
 
     @Test
+    fun `adoption can freeze exact filenames in a NUL list`() {
+        val fileList = Files.createTempFile("piffbackup-adoption", ".from0").toFile().apply {
+            writeBytes("line\nbreak.jpg\u0000".toByteArray())
+        }
+
+        val preview = builder.adoptionPreview(mapping, ssh, fileList)
+        val transfer = builder.adoptionTransfer(mapping, ssh, fileList)
+
+        listOf(preview, transfer).forEach { command ->
+            assertTrue("--from0" in command.arguments)
+            assertTrue("--files-from=${fileList.path}" in command.arguments)
+            assertFalse(command.arguments.any { it == "--delete" || it.startsWith("--delete-") })
+        }
+        assertTrue("--dry-run" in preview.arguments)
+        assertFalse("--dry-run" in transfer.arguments)
+    }
+
+    @Test
     fun `incremental transfer uses nonempty NUL file list without adoption comparison`() {
         val fileList = Files.createTempFile("piffbackup-command", ".from0").toFile().apply {
             writeBytes(byteArrayOf('x'.code.toByte(), 0))

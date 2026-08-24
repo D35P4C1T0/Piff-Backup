@@ -35,11 +35,17 @@ class RsyncCommandBuilder(
         require(sshExecutable.isAbsolute) { "SSH executable must be absolute" }
     }
 
-    fun adoptionPreview(mapping: BackupMapping, ssh: StrictSshConfig): RsyncCommand =
-        adoption(mapping, ssh, dryRun = true)
+    fun adoptionPreview(
+        mapping: BackupMapping,
+        ssh: StrictSshConfig,
+        fileList: java.io.File? = null,
+    ): RsyncCommand = adoption(mapping, ssh, fileList, dryRun = true)
 
-    fun adoptionTransfer(mapping: BackupMapping, ssh: StrictSshConfig): RsyncCommand =
-        adoption(mapping, ssh, dryRun = false)
+    fun adoptionTransfer(
+        mapping: BackupMapping,
+        ssh: StrictSshConfig,
+        fileList: java.io.File? = null,
+    ): RsyncCommand = adoption(mapping, ssh, fileList, dryRun = false)
 
     fun incrementalTransfer(
         transfer: PlannedMediaTransfer,
@@ -84,6 +90,7 @@ class RsyncCommandBuilder(
     private fun adoption(
         mapping: BackupMapping,
         ssh: StrictSshConfig,
+        fileList: java.io.File?,
         dryRun: Boolean,
     ): RsyncCommand {
         validateMappingAndLocalRoot(mapping)
@@ -105,6 +112,13 @@ class RsyncCommandBuilder(
             "--timeout=$IO_TIMEOUT_SECONDS",
             "--rsh=${StrictSshCommand.rsyncRemoteShell(sshExecutable, ssh)}",
         )
+        if (fileList != null) {
+            require(fileList.isAbsolute && fileList.isFile && fileList.canRead() && fileList.length() > 0L) {
+                "Adoption file list must be readable and non-empty"
+            }
+            options += "--from0"
+            options += "--files-from=${fileList.path}"
+        }
         if (dryRun) {
             options += "--dry-run"
             // A second itemize option makes unchanged entries observable, so

@@ -2,6 +2,11 @@ package com.d35p4c1t0.piffbackup
 
 import android.app.Application
 import android.os.Environment
+import com.d35p4c1t0.piffbackup.adoption.InitialAdoptionCoordinator
+import com.d35p4c1t0.piffbackup.adoption.InitialFileListPlanner
+import com.d35p4c1t0.piffbackup.adoption.NativeAdoptionRsyncExecutor
+import com.d35p4c1t0.piffbackup.adoption.NativeRemoteDirectoryBrowser
+import com.d35p4c1t0.piffbackup.adoption.PrimaryTreeSelectionResolver
 import com.d35p4c1t0.piffbackup.data.DurableBackupStore
 import com.d35p4c1t0.piffbackup.data.DurableConfigurationStore
 import com.d35p4c1t0.piffbackup.data.PiffBackupDatabase
@@ -11,6 +16,8 @@ import com.d35p4c1t0.piffbackup.onboarding.NativeOnboardingCredentialManager
 import com.d35p4c1t0.piffbackup.onboarding.NativeStorageBoxDestinationVerifier
 import com.d35p4c1t0.piffbackup.onboarding.RoomOnboardingProfileStore
 import com.d35p4c1t0.piffbackup.onboarding.SshjPasswordKeyInstaller
+import com.d35p4c1t0.piffbackup.media.AndroidMediaStoreSource
+import com.d35p4c1t0.piffbackup.media.IncrementalFileListStore
 import com.d35p4c1t0.piffbackup.security.EncryptedCredentialVault
 import com.google.android.material.color.DynamicColors
 import java.io.File
@@ -42,13 +49,46 @@ class PiffBackupApp : Application() {
         NativeOnboardingCredentialManager(applicationContext, credentialVault)
     }
 
+    val knownHostStore: KnownHostStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        KnownHostStore(applicationContext)
+    }
+
     val onboardingCoordinator: HetznerOnboardingCoordinator by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         HetznerOnboardingCoordinator(
             profiles = RoomOnboardingProfileStore(configurationStore),
             credentials = onboardingCredentials,
             passwordInstaller = SshjPasswordKeyInstaller(),
-            knownHosts = KnownHostStore(applicationContext),
+            knownHosts = knownHostStore,
             destinationVerifier = NativeStorageBoxDestinationVerifier(applicationContext),
+        )
+    }
+
+    val treeSelectionResolver: PrimaryTreeSelectionResolver by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        PrimaryTreeSelectionResolver(Environment.getExternalStorageDirectory())
+    }
+
+    val remoteDirectoryBrowser: NativeRemoteDirectoryBrowser by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        NativeRemoteDirectoryBrowser(applicationContext, onboardingCredentials, knownHostStore)
+    }
+
+    val adoptionFileLists: IncrementalFileListStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        IncrementalFileListStore(File(noBackupFilesDir, "adoption-file-lists"))
+    }
+
+    val initialAdoptionCoordinator: InitialAdoptionCoordinator by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        val mediaSource = AndroidMediaStoreSource(applicationContext)
+        InitialAdoptionCoordinator(
+            configuration = configurationStore,
+            durableBackup = durableBackupStore,
+            mediaSource = mediaSource,
+            fileLists = InitialFileListPlanner(
+                source = mediaSource,
+                store = adoptionFileLists,
+                volumeRoot = Environment.getExternalStorageDirectory(),
+            ),
+            credentials = onboardingCredentials,
+            knownHosts = knownHostStore,
+            rsync = NativeAdoptionRsyncExecutor(applicationContext),
         )
     }
 
@@ -56,6 +96,7 @@ class PiffBackupApp : Application() {
         super.onCreate()
         runCatching { credentialVault.cleanupAbandonedTemporaryKeys() }
         runCatching { onboardingCredentials.cleanupAbandonedGeneratedKeys() }
+        runCatching { adoptionFileLists.cleanupExactTemporaryLists() }
         DynamicColors.applyToActivitiesIfAvailable(this)
     }
 }
