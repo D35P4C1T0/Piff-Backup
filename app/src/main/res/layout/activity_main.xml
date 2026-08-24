@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true">
@@ -10,34 +11,217 @@
         android:orientation="vertical"
         android:padding="24dp">
 
-        <TextView
+        <LinearLayout
+            android:id="@+id/welcome_group"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/app_name"
-            android:textAppearance="?attr/textAppearanceHeadlineMedium" />
+            android:orientation="vertical">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/native_spike_description"
-            android:textAppearance="?attr/textAppearanceBodyLarge" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/app_name"
+                android:textAppearance="?attr/textAppearanceHeadlineLarge" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/run_probe_button"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:minHeight="48dp"
-            android:text="@string/run_local_probe" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/welcome_description"
+                android:textAppearance="?attr/textAppearanceBodyLarge" />
 
-        <TextView
-            android:id="@+id/probe_result"
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/start_setup_button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp"
+                android:minHeight="48dp"
+                android:text="@string/set_up_backup" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/connect_group"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:fontFamily="monospace"
-            android:text="@string/probe_not_run"
-            android:textIsSelectable="true" />
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/connect_storage_box"
+                android:textAppearance="?attr/textAppearanceHeadlineMedium" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/connect_explanation"
+                android:textAppearance="?attr/textAppearanceBodyMedium" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:hint="@string/storage_box_username">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/username_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:autofillHints="username"
+                    android:inputType="textNoSuggestions"
+                    android:maxLength="64"
+                    android:singleLine="true"
+                    android:text="@string/default_storage_box_username" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:hint="@string/storage_box_password"
+                app:endIconMode="password_toggle">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/password_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:autofillHints="password"
+                    android:importantForAutofill="noExcludeDescendants"
+                    android:inputType="textPassword"
+                    android:maxLength="1024"
+                    android:saveEnabled="false"
+                    android:singleLine="true" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.checkbox.MaterialCheckBox
+                android:id="@+id/advanced_hostname_toggle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:minHeight="48dp"
+                android:text="@string/use_different_server" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/hostname_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/server_address"
+                android:visibility="gone">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/hostname_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textUri"
+                    android:maxLength="253"
+                    android:singleLine="true" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/ssh_port_explanation"
+                android:textAppearance="?attr/textAppearanceBodySmall" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/connect_button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:minHeight="48dp"
+                android:text="@string/connect_and_continue" />
+
+            <com.google.android.material.progressindicator.LinearProgressIndicator
+                android:id="@+id/connect_progress"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:indeterminate="true"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/connect_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:accessibilityLiveRegion="polite"
+                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/connect_error"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:accessibilityLiveRegion="assertive"
+                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:visibility="gone" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/open_console_button"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:minHeight="48dp"
+                android:text="@string/open_hetzner_console"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/connected_group"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/storage_box_connected"
+                android:textAppearance="?attr/textAppearanceHeadlineMedium" />
+
+            <TextView
+                android:id="@+id/connected_summary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:textAppearance="?attr/textAppearanceBodyLarge" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="@string/server_fingerprint_label"
+                android:textAppearance="?attr/textAppearanceLabelLarge" />
+
+            <TextView
+                android:id="@+id/server_fingerprint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:fontFamily="monospace"
+                android:textIsSelectable="true"
+                android:textAppearance="?attr/textAppearanceBodySmall" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/fingerprint_help"
+                android:textAppearance="?attr/textAppearanceBodySmall" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/reconnect_button"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:minHeight="48dp"
+                android:text="@string/change_connection" />
+        </LinearLayout>
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

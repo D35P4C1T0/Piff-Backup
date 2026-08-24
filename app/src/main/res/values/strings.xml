@@ -1,8 +1,33 @@
 <resources>
     <string name="app_name">PiffBackup</string>
-    <string name="native_spike_description">Native feasibility diagnostics. This local check never connects to a server and uses only isolated app cache folders.</string>
-    <string name="run_local_probe">Run safe local check</string>
-    <string name="probe_not_run">Not checked yet</string>
-    <string name="probe_running">Checking packaged tools…</string>
-    <string name="probe_failed">Check failed: %1$s</string>
+    <string name="default_storage_box_username" translatable="false">u123456</string>
+    <string name="welcome_description">Back up your photos and videos to your private Storage Box.</string>
+    <string name="set_up_backup">Set up backup</string>
+    <string name="connect_storage_box">Connect Storage Box</string>
+    <string name="connect_explanation">Enter your Storage Box password once. PiffBackup will install a dedicated key, then erase the password without saving it.</string>
+    <string name="storage_box_username">Username</string>
+    <string name="storage_box_password">Password</string>
+    <string name="use_different_server">Use a different server address</string>
+    <string name="server_address">Server address</string>
+    <string name="ssh_port_explanation">Secure backup connection on port 23</string>
+    <string name="connect_and_continue">Connect</string>
+    <string name="open_hetzner_console">Open Hetzner Console</string>
+    <string name="storage_box_connected">Storage Box connected</string>
+    <string name="connected_summary">Dedicated key verified for %1$s. Existing backup folder %2$s was found without changing it.</string>
+    <string name="server_fingerprint_label">Server fingerprint</string>
+    <string name="fingerprint_help">PiffBackup will stop if this server identity changes. You can compare it with the fingerprint shown by Hetzner.</string>
+    <string name="change_connection">Change connection</string>
+    <string name="progress_preparing_key">Protecting a dedicated backup key…</string>
+    <string name="progress_connecting_password">Connecting securely…</string>
+    <string name="progress_installing_key">Installing the dedicated key…</string>
+    <string name="progress_verifying">Verifying the key and existing backup folder…</string>
+    <string name="progress_saving">Saving the protected connection…</string>
+    <string name="error_invalid_input">Check the username, server address, and password.</string>
+    <string name="error_network">Couldn’t reach the Storage Box. In Hetzner Console, enable SSH Support and External Reachability, wait a few minutes, then retry.</string>
+    <string name="error_authentication">The Storage Box rejected that username or password. Check them and retry.</string>
+    <string name="error_host_changed">The server identity changed. PiffBackup stopped to protect your backup. Verify the fingerprint in Hetzner Console before changing this connection.</string>
+    <string name="error_key_install">The password worked, but the dedicated key could not be installed. Retry after confirming SSH Support is enabled.</string>
+    <string name="error_key_verify">The dedicated key could not reconnect securely. No backup was started.</string>
+    <string name="error_destination_missing">Connected securely, but the existing Bianca folder was not found. Nothing was created or changed.</string>
+    <string name="error_secure_storage">The protected connection could not be saved on this device. No backup was started.</string>
 </resources>

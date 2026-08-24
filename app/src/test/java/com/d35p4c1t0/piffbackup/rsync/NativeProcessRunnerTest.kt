@@ -57,4 +57,17 @@ class NativeProcessRunnerTest {
         assertTrue(result.exitCode != 0)
         assertTrue(result.durationMillis < 5_000)
     }
+
+    @Test
+    fun `bounded await terminates a timed out process`() {
+        val result = NativeProcessRunner().start(
+            listOf("/bin/sleep", "30"),
+            workingDirectory,
+        ).await(timeoutMillis = 50L)
+
+        assertTrue(result.timedOut)
+        assertTrue(result.cancelled)
+        assertTrue(result.exitCode != 0)
+        assertTrue(result.durationMillis < 5_000)
+    }
 }

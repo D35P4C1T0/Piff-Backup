@@ -11,6 +11,8 @@ room3 = "3.0.1"
 sqlite = "2.6.2"
 ksp = "2.3.10"
 coroutines = "1.10.2"
+sshj = "0.40.0"
+slf4j = "2.0.18"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -25,6 +27,8 @@ androidx-room3-compiler = { group = "androidx.room3", name = "room3-compiler", v
 androidx-room3-testing = { group = "androidx.room3", name = "room3-testing", version.ref = "room3" }
 androidx-sqlite-framework = { group = "androidx.sqlite", name = "sqlite-framework", version.ref = "sqlite" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+sshj = { group = "com.hierynomus", name = "sshj", version.ref = "sshj" }
+slf4j-nop = { group = "org.slf4j", name = "slf4j-nop", version.ref = "slf4j" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

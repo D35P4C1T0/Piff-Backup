@@ -14,6 +14,7 @@ data class NativeProcessResult(
     val stdoutTruncated: Boolean,
     val stderrTruncated: Boolean,
     val cancelled: Boolean,
+    val timedOut: Boolean,
     val durationMillis: Long,
 )
 
@@ -54,6 +55,7 @@ class RunningNativeProcess internal constructor(
 ) {
     private val startedAtNanos = System.nanoTime()
     private val cancellationRequested = AtomicBoolean(false)
+    private val timeoutReached = AtomicBoolean(false)
     private val stdoutCapture = BoundedStreamCapture(
         input = process.inputStream,
         limit = captureLimitBytes,
@@ -75,8 +77,18 @@ class RunningNativeProcess internal constructor(
         }
     }
 
-    fun await(): NativeProcessResult {
-        val exitCode = process.waitFor()
+    fun await(): NativeProcessResult = finishAfterExit(process.waitFor())
+
+    fun await(timeoutMillis: Long): NativeProcessResult {
+        require(timeoutMillis > 0L) { "timeoutMillis must be positive" }
+        if (!process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS)) {
+            timeoutReached.set(true)
+            cancel()
+        }
+        return finishAfterExit(process.waitFor())
+    }
+
+    private fun finishAfterExit(exitCode: Int): NativeProcessResult {
         stdoutCapture.join()
         stderrCapture.join()
         return NativeProcessResult(
@@ -86,6 +98,7 @@ class RunningNativeProcess internal constructor(
             stdoutTruncated = stdoutCapture.truncated,
             stderrTruncated = stderrCapture.truncated,
             cancelled = cancellationRequested.get(),
+            timedOut = timeoutReached.get(),
             durationMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos),
         )
     }

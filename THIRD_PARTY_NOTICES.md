@@ -30,3 +30,25 @@ warranty. Dropbear also contains separately noticed LibTomCrypt, LibTomMath,
 OpenSSH, PuTTY, and public-domain components. Their complete notices are
 preserved in the exact source archive's `LICENSE`, `libtomcrypt/LICENSE`, and
 `libtommath/LICENSE` files.
+
+## SSHJ 0.40.0 and onboarding dependencies
+
+PiffBackup uses SSHJ 0.40.0 only for the one-time password-authenticated
+`install-ssh-key` onboarding command. SSHJ is copyright its contributors and
+licensed under the Apache License 2.0. Source and license:
+`https://github.com/hierynomus/sshj/tree/v0.40.0`.
+
+SSHJ brings these runtime dependencies into the APK:
+
+- Bouncy Castle `bcprov-jdk18on` 1.80.2, `bcpkix-jdk18on` 1.80, and
+  `bcutil-jdk18on` 1.80.2, distributed under the Bouncy Castle licence at
+  `https://www.bouncycastle.org/about/licence.html`.
+- `com.hierynomus:asn-one` 0.6.0, licensed under Apache License 2.0; source at
+  `https://github.com/hierynomus/asn-one`.
+- SLF4J API/NOP 2.0.18, copyright its contributors and licensed under the MIT
+  License; source and licence at `https://www.slf4j.org/license.html`.
+
+Apache License 2.0 is available at
+`https://www.apache.org/licenses/LICENSE-2.0`. These Java libraries are not
+used for ongoing file transfer; packaged Dropbear remains the strict native
+transport after onboarding.
