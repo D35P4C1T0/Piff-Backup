@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">PiffBackup</string>
+    <string name="native_spike_description">Native feasibility diagnostics. This local check never connects to a server and uses only isolated app cache folders.</string>
+    <string name="run_local_probe">Run safe local check</string>
+    <string name="probe_not_run">Not checked yet</string>
+    <string name="probe_running">Checking packaged tools…</string>
+    <string name="probe_failed">Check failed: %1$s</string>
+</resources>

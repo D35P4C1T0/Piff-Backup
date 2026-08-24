@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">PiffBackup</string>
+    <string name="native_spike_description">Diagnostica di fattibilità nativa. Questo controllo locale non si connette a nessun server e usa solo cartelle isolate nella cache dell’app.</string>
+    <string name="run_local_probe">Esegui controllo locale sicuro</string>
+    <string name="probe_not_run">Non ancora controllato</string>
+    <string name="probe_running">Controllo degli strumenti inclusi…</string>
+    <string name="probe_failed">Controllo non riuscito: %1$s</string>
+</resources>

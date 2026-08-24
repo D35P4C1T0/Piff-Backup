@@ -1,0 +1,9 @@
+/* PiffBackup client-only build. No server or forwarding functionality. */
+#define DROPBEAR_SVR_PASSWORD_AUTH 0
+#define DROPBEAR_CLI_PASSWORD_AUTH 0
+#define DROPBEAR_CLI_LOCALTCPFWD 0
+#define DROPBEAR_CLI_REMOTETCPFWD 0
+#define DROPBEAR_CLI_AGENTFWD 0
+#define DROPBEAR_CLI_PROXYCMD 0
+#define DROPBEAR_CLI_NETCAT 0
+#define DROPBEAR_X11FWD 0
