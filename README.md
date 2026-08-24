@@ -3,11 +3,11 @@
 PiffBackup is an Android 13+ one-way media backup app for a private Hetzner
 Storage Box. Development follows `reference/PROJECT.MD` phase by phase.
 
-Current status: Phase 2 core command engine. The project builds a single
-`arm64-v8a` APK, includes reproducibly built rsync and strict SSH tools, and has
-validated non-destructive adoption-preview/transfer commands with progress,
-cancellation, and exit classification. No real backup, onboarding, or Storage
-Box credential flow is enabled yet.
+Current status: Phase 3 MediaStore incremental planner. The project builds a
+single `arm64-v8a` APK, includes reproducibly built rsync and strict SSH tools,
+and can safely turn bounded MediaStore generation changes into one streamed,
+NUL-delimited rsync file list per changed root. No real backup, onboarding, or
+Storage Box credential flow is enabled yet.
 
 ## Build
 
@@ -34,7 +34,8 @@ JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradle
 
 See `tools/native/README.md` for native reproduction,
 `PHASE1_NATIVE_SPIKE.md` for native feasibility evidence, and
-`PHASE2_COMMAND_ENGINE.md` for command-engine semantics and verification.
+`PHASE2_COMMAND_ENGINE.md` for command-engine semantics. Phase 3 design and
+verification are recorded in `PHASE3_MEDIASTORE_PLANNER.md`.
 
 ## Safety and privacy
 

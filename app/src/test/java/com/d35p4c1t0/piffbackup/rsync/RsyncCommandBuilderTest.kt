@@ -3,8 +3,11 @@ package com.d35p4c1t0.piffbackup.rsync
 import com.d35p4c1t0.piffbackup.backup.BackupMapping
 import com.d35p4c1t0.piffbackup.backup.CanonicalLocalRoot
 import com.d35p4c1t0.piffbackup.backup.RemoteRelativePath
+import com.d35p4c1t0.piffbackup.media.MediaStoreMapping
+import com.d35p4c1t0.piffbackup.media.PlannedMediaTransfer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -70,5 +73,42 @@ class RsyncCommandBuilderTest {
         assertFalse("--dry-run" in command.arguments)
         assertTrue("--info=progress2" in command.arguments)
         assertEquals(1, command.arguments.count { it == "--itemize-changes" })
+    }
+
+    @Test
+    fun `incremental transfer uses nonempty NUL file list without adoption comparison`() {
+        val fileList = Files.createTempFile("piffbackup-command", ".from0").toFile().apply {
+            writeBytes(byteArrayOf('x'.code.toByte(), 0))
+        }
+        val transfer = PlannedMediaTransfer(
+            mapping = MediaStoreMapping.create(mapping, shared),
+            fileList = fileList,
+            itemCount = 1L,
+        )
+
+        val command = builder.incrementalTransfer(transfer, ssh)
+
+        assertTrue("--from0" in command.arguments)
+        assertTrue("--files-from=${fileList.path}" in command.arguments)
+        assertTrue("--whole-file" in command.arguments)
+        assertFalse("--size-only" in command.arguments)
+        assertFalse("--dry-run" in command.arguments)
+        assertFalse("--checksum" in command.arguments)
+        assertFalse(command.arguments.any { it == "--delete" || it.startsWith("--delete-") })
+        assertEquals(RsyncOutputKind.INCREMENTAL_TRANSFER, command.outputKind)
+        assertEquals(mapping.localRoot.pathWithTrailingSlash, command.arguments[command.arguments.lastIndex - 1])
+    }
+
+    @Test
+    fun `incremental plan cannot represent an empty file list`() {
+        val empty = Files.createTempFile("piffbackup-command-empty", ".from0").toFile()
+
+        assertThrows(IllegalArgumentException::class.java) {
+            PlannedMediaTransfer(
+                mapping = MediaStoreMapping.create(mapping, shared),
+                fileList = empty,
+                itemCount = 1L,
+            )
+        }
     }
 }

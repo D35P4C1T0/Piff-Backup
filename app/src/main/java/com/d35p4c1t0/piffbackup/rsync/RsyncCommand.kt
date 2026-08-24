@@ -3,6 +3,7 @@ package com.d35p4c1t0.piffbackup.rsync
 import com.d35p4c1t0.piffbackup.backup.BackupMapping
 import com.d35p4c1t0.piffbackup.backup.BackupMappingValidator
 import com.d35p4c1t0.piffbackup.backup.RemoteRelativePath
+import com.d35p4c1t0.piffbackup.media.PlannedMediaTransfer
 
 data class RsyncCommand(
     val arguments: List<String>,
@@ -21,6 +22,7 @@ data class RsyncCommand(
 enum class RsyncOutputKind {
     ADOPTION_PREVIEW,
     ADOPTION_TRANSFER,
+    INCREMENTAL_TRANSFER,
 }
 
 class RsyncCommandBuilder(
@@ -39,15 +41,52 @@ class RsyncCommandBuilder(
     fun adoptionTransfer(mapping: BackupMapping, ssh: StrictSshConfig): RsyncCommand =
         adoption(mapping, ssh, dryRun = false)
 
+    fun incrementalTransfer(
+        transfer: PlannedMediaTransfer,
+        ssh: StrictSshConfig,
+    ): RsyncCommand {
+        val mapping = transfer.mapping.mapping
+        validateMappingAndLocalRoot(mapping)
+        require(transfer.fileList.isAbsolute) { "Incremental file list must be absolute" }
+        require(transfer.fileList.isFile && transfer.fileList.canRead() && transfer.fileList.length() > 0L) {
+            "Incremental file list must be readable and non-empty"
+        }
+        val options = mutableListOf(
+            rsyncExecutable.path,
+            "-rlt",
+            "--from0",
+            "--files-from=${transfer.fileList.path}",
+            "--whole-file",
+            "--partial",
+            "--partial-dir=.rsync-partial",
+            "--no-owner",
+            "--no-group",
+            "--no-perms",
+            "--protect-args",
+            "--itemize-changes",
+            "--stats",
+            "--outbuf=L",
+            "--out-format=$ITEM_RECORD_PREFIX%i:%l",
+            "--timeout=$IO_TIMEOUT_SECONDS",
+            "--rsh=${StrictSshCommand.rsyncRemoteShell(sshExecutable, ssh)}",
+            "--info=progress2",
+            "--",
+            mapping.localRoot.pathWithTrailingSlash,
+            "${ssh.username}@${ssh.hostname}:${mapping.remoteRoot.pathWithTrailingSlash}",
+        )
+        return RsyncCommand(
+            arguments = options,
+            environment = StrictSshCommand.environment(ssh) + mapOf("LC_ALL" to "C"),
+            outputKind = RsyncOutputKind.INCREMENTAL_TRANSFER,
+        )
+    }
+
     private fun adoption(
         mapping: BackupMapping,
         ssh: StrictSshConfig,
         dryRun: Boolean,
     ): RsyncCommand {
-        BackupMappingValidator.validate(listOf(mapping), remoteBasePath)
-        require(mapping.localRoot.file.isDirectory && mapping.localRoot.file.canRead()) {
-            "Local root must be an accessible directory"
-        }
+        validateMappingAndLocalRoot(mapping)
         val options = mutableListOf(
             rsyncExecutable.path,
             "-rlt",
@@ -82,6 +121,13 @@ class RsyncCommandBuilder(
             environment = StrictSshCommand.environment(ssh) + mapOf("LC_ALL" to "C"),
             outputKind = if (dryRun) RsyncOutputKind.ADOPTION_PREVIEW else RsyncOutputKind.ADOPTION_TRANSFER,
         )
+    }
+
+    private fun validateMappingAndLocalRoot(mapping: BackupMapping) {
+        BackupMappingValidator.validate(listOf(mapping), remoteBasePath)
+        require(mapping.localRoot.file.isDirectory && mapping.localRoot.file.canRead()) {
+            "Local root must be an accessible directory"
+        }
     }
 
     companion object {
