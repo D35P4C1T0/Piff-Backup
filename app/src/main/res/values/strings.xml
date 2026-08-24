@@ -1,6 +1,5 @@
 <resources>
     <string name="app_name">PiffBackup</string>
-    <string name="default_storage_box_username" translatable="false">u123456</string>
     <string name="welcome_description">Back up your photos and videos to your private Storage Box.</string>
     <string name="set_up_backup">Set up backup</string>
     <string name="connect_storage_box">Connect Storage Box</string>

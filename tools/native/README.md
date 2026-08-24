@@ -10,6 +10,8 @@ The source archives are fetched over HTTPS and rejected unless their SHA-256
 matches `checksums.txt`. Nothing downloads executable code at app runtime.
 `dropbear-localoptions.h` removes server, password, forwarding, proxy-command,
 agent-forwarding, and X11 functionality; PiffBackup's transport is key-only.
+`dropbear-rsa-hostkey-first.patch` keeps Ed25519 client-key support but prefers
+the server's RSA-SHA2 host key, matching the key pinned by Android onboarding.
 
 ## Build on macOS
 

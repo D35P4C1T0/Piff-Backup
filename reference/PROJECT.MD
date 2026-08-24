@@ -27,10 +27,10 @@ The scale estimates discussed during planning were roughly 100,000 existing remo
 - Distribution: signed APK installed directly by the owner; Google Play distribution is out of scope
 - CPU target for the first release: `arm64-v8a`
 - Development host: macOS, supporting both Apple Silicon and Intel where reasonably possible
-- Storage Box username: `u123456`
-- Storage Box hostname: `u123456.your-storagebox.de`
+- Storage Box username: provided by the user during onboarding
+- Storage Box hostname: `<storage-box-username>.your-storagebox.de`
 - Hetzner SSH/rsync port: `23`
-- Existing SMB-visible destination: `smb://u123456.your-storagebox.de/backup/Bianca/`
+- Existing SMB-visible destination: `smb://<storage-box-username>.your-storagebox.de/backup/Bianca/`
 - Expected SSH/rsync home-relative destination corresponding to that SMB path: `Bianca/`
 
 Important: the SMB share component `backup` represents the main account's share and should not automatically become part of the rsync destination. Before adoption, verify harmlessly that SSH-relative `Bianca/` exposes the same directory as SMB `/backup/Bianca/`. Do not assume or write to `backup/Bianca/` unless a real connection test proves that is correct.
@@ -94,7 +94,7 @@ rsync \
   --stats \
   -e "<strict SSH command using port 23>" \
   <local-root-with-trailing-slash> \
-  u123456@u123456.your-storagebox.de:<mapped-relative-remote-root-with-trailing-slash>
+  <storage-box-username>@<storage-box-username>.your-storagebox.de:<mapped-relative-remote-root-with-trailing-slash>
 ```
 
 The precise flags may be adjusted after compatibility testing, but preserve these semantics:
@@ -157,7 +157,7 @@ rsync \
   --stats \
   -e "<strict SSH command using port 23>" \
   <local-root-with-trailing-slash> \
-  u123456@u123456.your-storagebox.de:<mapped-relative-remote-root-with-trailing-slash>
+  <storage-box-username>@<storage-box-username>.your-storagebox.de:<mapped-relative-remote-root-with-trailing-slash>
 ```
 
 Requirements for file lists:
@@ -276,7 +276,7 @@ Back up your photos and videos to your private Storage Box.
 
 Fields:
 
-- Username, prefilled `u123456` but editable.
+- Username, initially empty and editable.
 - Password, never prefilled or persisted in plaintext.
 
 Derive the default hostname as `<username>.your-storagebox.de`, while allowing an advanced override.
@@ -652,7 +652,7 @@ The project is done when all of the following are true:
 - A clean checkout builds on a documented macOS setup.
 - The native rsync and SSH tools are reproducibly buildable for `arm64-v8a`.
 - A signed or debug APK installs on a Galaxy S23+.
-- Onboarding connects to `u123456.your-storagebox.de:23` without terminal use.
+- Onboarding connects to `<storage-box-username>.your-storagebox.de:23` without terminal use.
 - The app verifies and uses the existing `Bianca/` destination safely.
 - The user can configure any number of non-overlapping local roots and map them to remote folders.
 - Initial adoption previews and skips same-path/same-size existing media without deleting anything.

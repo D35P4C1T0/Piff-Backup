@@ -13,6 +13,7 @@ mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
 tar -xjf "$DOWNLOAD_DIR/$ARCHIVE" -C "$BUILD_DIR"
 
 cd "$source_dir"
+patch -p1 < "$NATIVE_DIR/dropbear-rsa-hostkey-first.patch"
 build_triplet=$(sh ./src/config.guess)
 ./configure \
     --build="$build_triplet" \

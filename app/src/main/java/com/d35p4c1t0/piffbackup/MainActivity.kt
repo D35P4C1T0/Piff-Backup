@@ -186,7 +186,7 @@ class MainActivity : AppCompatActivity() {
         activePreview = null
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         showOnly(binding.connectGroup)
-        val username = profile?.username ?: getString(R.string.default_storage_box_username)
+        val username = profile?.username.orEmpty()
         binding.usernameInput.setText(username)
         val derived = "$username.your-storagebox.de"
         val advanced = profile?.hostname?.takeIf { it != derived }

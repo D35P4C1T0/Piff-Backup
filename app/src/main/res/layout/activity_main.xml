@@ -72,8 +72,7 @@
                     android:autofillHints="username"
                     android:inputType="textNoSuggestions"
                     android:maxLength="64"
-                    android:singleLine="true"
-                    android:text="@string/default_storage_box_username" />
+                    android:singleLine="true" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.textfield.TextInputLayout

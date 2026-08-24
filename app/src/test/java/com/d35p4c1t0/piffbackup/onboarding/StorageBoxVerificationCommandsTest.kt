@@ -1,8 +1,11 @@
 package com.d35p4c1t0.piffbackup.onboarding
 
+import com.d35p4c1t0.piffbackup.rsync.StrictSshConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 class StorageBoxVerificationCommandsTest {
     @Test
@@ -14,5 +17,27 @@ class StorageBoxVerificationCommandsTest {
             StorageBoxVerificationCommands.DESTINATION_CHECK
         assertFalse(allArguments.any { it in setOf("rm", "rmdir", "mv", "touch", "mkdir") })
         assertFalse(allArguments.any { it.contains("--delete") })
+    }
+
+    @Test
+    fun `native ssh diagnostic redacts endpoint and private paths`() {
+        val config = StrictSshConfig(
+            username = "u123456",
+            hostname = "u123456.your-storagebox.de",
+            port = 23,
+            identityFile = File("/private/key-123"),
+            sshHomeDirectory = File("/private/ssh-home"),
+        )
+
+        val diagnostic = safeNativeSshDiagnostic(
+            "Host u123456.your-storagebox.de unknown; key /private/key-123; home /private/ssh-home",
+            config,
+        )
+
+        assertFalse(diagnostic.contains("u123456"))
+        assertFalse(diagnostic.contains("/private"))
+        assertTrue(diagnostic.contains("<hostname>"))
+        assertTrue(diagnostic.contains("<identity>"))
+        assertTrue(diagnostic.contains("<ssh-home>"))
     }
 }
