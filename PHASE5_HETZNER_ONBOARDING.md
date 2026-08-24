@@ -1,8 +1,7 @@
 # Phase 5 — Hetzner onboarding
 
-Status: implemented and verified on the host on 2026-08-24. The Android
-credential tests compile, but their new Phase 5 cases have not yet run on a
-device because no ADB device or emulator was connected for the final run.
+Status: implemented and verified on the host and an ARM64 Samsung SM-P610
+running API 33 on 2026-08-24.
 
 ## Password-once authentication
 
@@ -71,17 +70,18 @@ The final Phase 5 gate covers:
   `known_hosts` permissions; and
 - debug, minified release, instrumentation-APK, and Android lint builds.
 
-All 49 host tests pass, as do the debug, minified release, instrumentation-APK,
-and lint builds. The unsigned minified release APK is 3,922,578 bytes. Lint has
-no errors; its remaining security warning points into an unused TLS trust-manager
-class in the transitive Bouncy Castle archive, not PiffBackup's SSH host-key
-verifier, and R8 removes that class from the release application.
+All 49 host tests and all 12 Android tests pass, as do the debug, minified
+release, instrumentation-APK, and lint builds. The device run includes the four
+Phase 5 credential, native-key, cleanup, and known-host tests. The unsigned
+minified release APK is 3,922,578 bytes. Lint has no errors; its remaining
+security warning points into an unused TLS trust-manager class in the transitive
+Bouncy Castle archive, not PiffBackup's SSH host-key verifier, and R8 removes
+that class from the release application.
 
 No live Storage Box connection was made, and no real `Bianca/` folder was
-touched. Before relying on onboarding in production, run the 12 compiled Android
-tests and one explicit manual setup against the intended device/account, compare
-the displayed fingerprint, and confirm that the read-only `Bianca/` check
-succeeds.
+touched. Before relying on onboarding in production, run one explicit manual
+setup against the intended account, compare the displayed fingerprint, and
+confirm that the read-only `Bianca/` check succeeds.
 
 ## Deferred to later phases
 
