@@ -645,13 +645,13 @@ Implement in this order:
 8. **UIDT and WorkManager execution**.
 9. **Security, accessibility, localization, performance, and release hardening**.
 
-Current implementation status (2026-08-25): Phases 1–6 are implemented and
-buildable. The first Phase 7 navigation slice is also implemented: successful
-backup is no longer a terminal screen, while the broader home/history/settings
-experience remains. Phases 8–9 remain pending. A user-driven live setup and
-initial upload succeeded on an ARM64 Samsung SM-P610 using the explicit
-`Matteo/` development root; `PERFORMANCE.md` records the observed baseline and
-its limitations. No destructive remote test was performed.
+Current implementation status (2026-08-25): Phases 1–7 are implemented and
+buildable. Completed setups open on the minimal home screen with status,
+one-tap discovery, last-success time, folder management, and settings. Phases
+8–9 remain pending. A user-driven live setup and initial upload succeeded on an
+ARM64 Samsung SM-P610 using the explicit `Matteo/` development root;
+`PERFORMANCE.md` records the observed baseline and its limitations. No
+destructive remote test was performed.
 
 After each phase, keep the project buildable and commit logically grouped changes if Git is available.
 

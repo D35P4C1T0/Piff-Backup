@@ -7,8 +7,10 @@ import android.os.Environment
 import android.provider.Settings
 import android.view.View
 import android.view.WindowManager
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.edit
 import androidx.core.net.toUri
 import androidx.core.view.isVisible
 import com.d35p4c1t0.piffbackup.adoption.AdoptionTransferProgress
@@ -33,8 +35,11 @@ import com.d35p4c1t0.piffbackup.onboarding.OnboardingProgress
 import com.d35p4c1t0.piffbackup.onboarding.OnboardingRequest
 import com.d35p4c1t0.piffbackup.onboarding.OnboardingResult
 import com.d35p4c1t0.piffbackup.onboarding.StorageBoxEndpoint
+import com.d35p4c1t0.piffbackup.ui.HomeBackupStatus
+import com.d35p4c1t0.piffbackup.ui.HomeScreenState
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.runBlocking
+import java.util.Date
 import java.util.UUID
 import java.util.concurrent.Executors
 
@@ -49,6 +54,14 @@ class MainActivity : AppCompatActivity() {
     private var remoteBrowserParent: RemoteRelativePath? = null
     private var selectedRemotePath: String? = null
     private var activePreview: InitialAdoptionPreview? = null
+    private var previewPurpose = PreviewPurpose.INITIAL_ADOPTION
+    private var hasCompletedAdoption = false
+    private var latestHomeState: HomeScreenState? = null
+    private var oneShotHomeMessage: String? = null
+
+    private val preferences by lazy {
+        getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE)
+    }
 
     private val storageSettings = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         updateStorageAccessState()
@@ -63,6 +76,20 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         bindActions()
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (hasCompletedAdoption && !binding.homeGroup.root.isVisible) {
+                        app.initialAdoptionCoordinator.discardPreview()
+                        activePreview = null
+                        loadExistingProfile(forceConnect = false)
+                    } else {
+                        finish()
+                    }
+                }
+            },
+        )
         loadExistingProfile(forceConnect = false)
     }
 
@@ -101,10 +128,29 @@ class MainActivity : AppCompatActivity() {
             binding.cancelAdoptionButton.isEnabled = false
             app.initialAdoptionCoordinator.cancel()
         }
-        binding.backupAgainButton.setOnClickListener { checkForNewFiles() }
-        binding.completeChangeMappingsButton.setOnClickListener { showMappingSetup() }
-        binding.completeChangeConnectionButton.setOnClickListener {
+        binding.homeGroup.homeBackupButton.setOnClickListener { handleHomePrimaryAction() }
+        binding.homeGroup.homeFoldersButton.setOnClickListener {
+            app.initialAdoptionCoordinator.discardPreview()
+            activePreview = null
+            showMappingSetup()
+        }
+        binding.homeGroup.homeSettingsButton.setOnClickListener { showSettings() }
+        binding.foldersBackButton.setOnClickListener {
+            app.remoteDirectoryBrowser.cancel()
+            loadExistingProfile(forceConnect = false)
+        }
+        binding.previewBackHomeButton.setOnClickListener {
+            app.initialAdoptionCoordinator.discardPreview()
+            activePreview = null
+            loadExistingProfile(forceConnect = false)
+        }
+        binding.settingsGroup.settingsBackButton.setOnClickListener { loadExistingProfile(forceConnect = false) }
+        binding.settingsGroup.settingsChangeConnectionButton.setOnClickListener {
             loadExistingProfile(forceConnect = true)
+        }
+        binding.settingsGroup.openBatterySettingsButton.setOnClickListener { openAppBatterySettings() }
+        binding.settingsGroup.automaticUploadSwitch.setOnCheckedChangeListener { _, checked ->
+            preferences.edit { putBoolean(AUTOMATIC_UPLOAD_KEY, checked) }
         }
     }
 
@@ -116,22 +162,35 @@ class MainActivity : AppCompatActivity() {
                 val checkpoint = profile?.let {
                     app.durableBackupStore.checkpointForPlanning(it.id, PRIMARY_VOLUME)
                 }
-                ExistingState(profile, mappings, checkpoint != null)
+                val lastSuccessfulRun = profile?.let { app.durableBackupStore.latestSuccessfulRun(it.id) }
+                ExistingState(profile, mappings, checkpoint != null, lastSuccessfulRun?.finishedAtEpochMillis)
             }
             runOnUiThread {
                 if (isDestroyed) return@runOnUiThread
                 activeProfile = state.profile
                 draftMappings.clear()
                 draftMappings += state.mappings.map(::mappingInput)
+                hasCompletedAdoption = state.lastSuccessfulBackupAtEpochMillis != null || state.hasCheckpoint
                 val profile = state.profile
                 if (!forceConnect && profile?.setupCompleted == true) {
                     val pin = runCatching { HostKeyPin.parse(requireNotNull(profile.pinnedHostKey)) }.getOrNull()
                     when {
                         pin == null -> showConnect(profile)
-                        state.hasCheckpoint -> showAdoptionComplete(null)
                         app.initialAdoptionCoordinator.currentPreview() != null -> {
+                            previewPurpose = if (state.lastSuccessfulBackupAtEpochMillis == null) {
+                                PreviewPurpose.INITIAL_ADOPTION
+                            } else {
+                                PreviewPurpose.NORMAL_BACKUP
+                            }
                             showAdoptionPreview(requireNotNull(app.initialAdoptionCoordinator.currentPreview()))
                         }
+                        hasCompletedAdoption -> showHome(
+                            HomeScreenState.loaded(
+                                mappingCount = state.mappings.count { it.enabled },
+                                lastSuccessfulBackupAtEpochMillis = state.lastSuccessfulBackupAtEpochMillis,
+                                hasCurrentCheckpoint = state.hasCheckpoint,
+                            ),
+                        )
                         else -> showConnected(profile, pin.sha256Fingerprint)
                     }
                 } else if (profile != null && (!profile.setupCompleted || forceConnect)) {
@@ -195,6 +254,63 @@ class MainActivity : AppCompatActivity() {
         showOnly(binding.welcomeGroup)
     }
 
+    private fun showHome(state: HomeScreenState) {
+        latestHomeState = state
+        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        showOnly(binding.homeGroup.root)
+        renderHomeState(state)
+    }
+
+    private fun renderHomeState(state: HomeScreenState) {
+        binding.homeGroup.homeStatusTitle.setText(
+            when (state.status) {
+                HomeBackupStatus.EVERYTHING_BACKED_UP -> R.string.everything_backed_up
+                HomeBackupStatus.LOOKING_FOR_CHANGES -> R.string.looking_for_new_media
+                HomeBackupStatus.NEW_ITEMS_READY -> R.string.new_items_ready
+                HomeBackupStatus.BACKING_UP -> R.string.backing_up_with_percentage
+                HomeBackupStatus.PAUSED -> R.string.backup_paused
+                HomeBackupStatus.NEEDS_ATTENTION -> R.string.needs_attention
+            },
+        )
+        binding.homeGroup.homeStatusDetail.text = oneShotHomeMessage ?: when (state.status) {
+            HomeBackupStatus.EVERYTHING_BACKED_UP -> getString(R.string.home_up_to_date_detail)
+            HomeBackupStatus.LOOKING_FOR_CHANGES -> getString(R.string.discovery_safe_detail)
+            HomeBackupStatus.NEW_ITEMS_READY -> getString(
+                R.string.new_items_summary_format,
+                UserFacingFormat.itemCount(state.changedItems),
+                UserFacingFormat.bytes(state.changedBytes),
+            )
+            HomeBackupStatus.BACKING_UP -> getString(
+                R.string.backing_up_percentage_format,
+                requireNotNull(state.progressPercentage),
+            )
+            HomeBackupStatus.PAUSED -> getString(R.string.backup_paused_detail)
+            HomeBackupStatus.NEEDS_ATTENTION -> getString(R.string.needs_attention_detail)
+        }
+        oneShotHomeMessage = null
+        binding.homeGroup.homeBackupButton.setText(
+            when (state.status) {
+                HomeBackupStatus.PAUSED -> R.string.resume_backup
+                HomeBackupStatus.BACKING_UP -> R.string.pause_backup
+                HomeBackupStatus.NEW_ITEMS_READY -> R.string.start_backup
+                else -> R.string.back_up_now
+            },
+        )
+        binding.homeGroup.homeBackupButton.isEnabled = state.status != HomeBackupStatus.LOOKING_FOR_CHANGES
+        val navigationEnabled = state.status != HomeBackupStatus.LOOKING_FOR_CHANGES &&
+            state.status != HomeBackupStatus.BACKING_UP
+        binding.homeGroup.homeFoldersButton.isEnabled = navigationEnabled
+        binding.homeGroup.homeSettingsButton.isEnabled = navigationEnabled
+        binding.homeGroup.homeLastBackup.text = state.lastSuccessfulBackupAtEpochMillis?.let {
+            getString(R.string.last_backup_format, formatDateTime(it))
+        } ?: getString(R.string.last_backup_never)
+        binding.homeGroup.homeFoldersButton.text = resources.getQuantityString(
+            R.plurals.folders_count,
+            state.mappingCount,
+            state.mappingCount,
+        )
+    }
+
     private fun showConnect(profile: StorageBoxProfileEntity?) {
         app.initialAdoptionCoordinator.discardPreview()
         activePreview = null
@@ -230,6 +346,10 @@ class MainActivity : AppCompatActivity() {
         val profile = activeProfile ?: return
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         showOnly(binding.adoptionMappingGroup)
+        binding.foldersBackButton.visibility = if (hasCompletedAdoption) View.VISIBLE else View.GONE
+        binding.previewAdoptionButton.setText(
+            if (hasCompletedAdoption) R.string.save_and_check_folders else R.string.check_existing_backup,
+        )
         binding.adoptionError.visibility = View.GONE
         binding.adoptionDiscoveryProgress.visibility = View.GONE
         binding.previewAdoptionButton.isEnabled = true
@@ -239,6 +359,26 @@ class MainActivity : AppCompatActivity() {
         hideMappingEditor()
         updateStorageAccessState()
         renderDraftMappings()
+    }
+
+    private fun showSettings() {
+        val profile = activeProfile ?: return
+        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        showOnly(binding.settingsGroup.root)
+        binding.settingsGroup.settingsConnectionSummary.text = getString(
+            R.string.settings_connection_summary,
+            profile.hostname,
+            profile.remoteBasePath.trimEnd('/') + "/",
+        )
+        binding.settingsGroup.settingsFingerprint.text = runCatching {
+            HostKeyPin.parse(requireNotNull(profile.pinnedHostKey)).sha256Fingerprint
+        }.getOrElse { getString(R.string.fingerprint_unavailable) }
+        binding.settingsGroup.automaticUploadSwitch.isChecked = preferences.getBoolean(AUTOMATIC_UPLOAD_KEY, false)
+    }
+
+    private fun openAppBatterySettings() {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:$packageName".toUri())
+        runCatching { startActivity(intent) }
     }
 
     private fun updateStorageAccessState() {
@@ -402,6 +542,7 @@ class MainActivity : AppCompatActivity() {
     }.isSuccess
 
     private fun renderDraftMappings() {
+        binding.configuredMappingActions.removeAllViews()
         binding.configuredMappings.text = if (draftMappings.isEmpty()) {
             getString(R.string.no_folders_configured)
         } else {
@@ -420,6 +561,23 @@ class MainActivity : AppCompatActivity() {
                 )
             }
         }
+        draftMappings.toList().forEach { mapping ->
+            val removeButton = MaterialButton(
+                this,
+                null,
+                com.google.android.material.R.attr.materialButtonOutlinedStyle,
+            ).apply {
+                text = getString(R.string.remove_folder_format, mapping.displayName)
+                isAllCaps = false
+                minHeight = resources.getDimensionPixelSize(R.dimen.adoption_touch_target)
+                setOnClickListener {
+                    draftMappings.removeAll { it.id == mapping.id }
+                    hideMappingEditor()
+                    renderDraftMappings()
+                }
+            }
+            binding.configuredMappingActions.addView(removeButton)
+        }
         binding.clearMappingsButton.visibility = if (draftMappings.isEmpty()) View.GONE else View.VISIBLE
         binding.previewAdoptionButton.isEnabled =
             Environment.isExternalStorageManager() && draftMappings.isNotEmpty()
@@ -432,9 +590,26 @@ class MainActivity : AppCompatActivity() {
 
     private fun beginAdoptionPreview() {
         val profile = activeProfile ?: return
+        val fromHome = binding.homeGroup.root.isVisible
+        previewPurpose = if (hasCompletedAdoption) PreviewPurpose.NORMAL_BACKUP else PreviewPurpose.INITIAL_ADOPTION
         if (!Environment.isExternalStorageManager()) {
-            showAdoptionError(InitialAdoptionError.STORAGE_PERMISSION_REQUIRED)
+            if (fromHome) {
+                oneShotHomeMessage = getString(R.string.adoption_error_permission)
+                showHome(requireNotNull(latestHomeState).copy(status = HomeBackupStatus.NEEDS_ATTENTION))
+            } else {
+                showAdoptionError(InitialAdoptionError.STORAGE_PERMISSION_REQUIRED)
+            }
             return
+        }
+        if (fromHome) {
+            showHome(
+                requireNotNull(latestHomeState).copy(
+                    status = HomeBackupStatus.LOOKING_FOR_CHANGES,
+                    changedItems = 0L,
+                    changedBytes = 0L,
+                    progressPercentage = null,
+                ),
+            )
         }
         binding.previewAdoptionButton.isEnabled = false
         binding.addLocalFolderButton.isEnabled = false
@@ -447,10 +622,24 @@ class MainActivity : AppCompatActivity() {
                 binding.adoptionDiscoveryProgress.visibility = View.GONE
                 binding.addLocalFolderButton.isEnabled = true
                 when (result) {
-                    is InitialAdoptionResult.Success -> showAdoptionPreview(result.value)
+                    is InitialAdoptionResult.Success -> {
+                        activePreview = result.value
+                        val startAutomatically = previewPurpose == PreviewPurpose.NORMAL_BACKUP &&
+                            (result.value.summary.itemsToUpload == 0L || automaticUploadEnabled())
+                        if (startAutomatically) {
+                            beginConfirmedAdoption()
+                        } else {
+                            showAdoptionPreview(result.value)
+                        }
+                    }
                     is InitialAdoptionResult.Failure -> {
                         binding.previewAdoptionButton.isEnabled = true
-                        showAdoptionError(result.error)
+                        if (fromHome) {
+                            oneShotHomeMessage = getString(adoptionErrorMessage(result.error))
+                            showHome(requireNotNull(latestHomeState).copy(status = HomeBackupStatus.NEEDS_ATTENTION))
+                        } else {
+                            showAdoptionError(result.error)
+                        }
                     }
                 }
             }
@@ -459,22 +648,48 @@ class MainActivity : AppCompatActivity() {
 
     private fun showAdoptionPreview(preview: InitialAdoptionPreview) {
         activePreview = preview
+        val normalBackup = previewPurpose == PreviewPurpose.NORMAL_BACKUP
+        if (normalBackup) {
+            showHome(
+                requireNotNull(latestHomeState).copy(
+                    status = HomeBackupStatus.NEW_ITEMS_READY,
+                    changedItems = preview.summary.itemsToUpload,
+                    changedBytes = preview.summary.bytesToUpload,
+                    progressPercentage = null,
+                ),
+            )
+            return
+        }
         showOnly(binding.adoptionPreviewGroup)
         binding.adoptionPreviewError.visibility = View.GONE
+        binding.adoptionPreviewTitle.setText(
+            R.string.existing_backup_checked,
+        )
         binding.adoptionSummary.text = getString(
             R.string.adoption_summary_format,
             UserFacingFormat.itemCount(preview.summary.alreadyBackedUpItems),
             UserFacingFormat.itemCount(preview.summary.itemsToUpload),
             UserFacingFormat.bytes(preview.summary.bytesToUpload),
         )
+        binding.previewExplanation.setText(R.string.no_backup_started_yet)
+        binding.previewBackHomeButton.visibility = if (hasCompletedAdoption) View.VISIBLE else View.GONE
         binding.startAdoptionButton.isEnabled = true
     }
 
     private fun beginConfirmedAdoption() {
         val preview = activePreview ?: return
-        showOnly(binding.adoptionTransferGroup)
-        binding.cancelAdoptionButton.isEnabled = true
-        binding.adoptionTransferProgress.setProgressCompat(0, false)
+        if (previewPurpose == PreviewPurpose.NORMAL_BACKUP) {
+            showHome(
+                requireNotNull(latestHomeState).copy(
+                    status = HomeBackupStatus.BACKING_UP,
+                    progressPercentage = 0,
+                ),
+            )
+        } else {
+            showOnly(binding.adoptionTransferGroup)
+            binding.cancelAdoptionButton.isEnabled = true
+            binding.adoptionTransferProgress.setProgressCompat(0, false)
+        }
         executor.execute {
             val result = runBlocking {
                 app.initialAdoptionCoordinator.confirm(preview.id) { progress ->
@@ -484,11 +699,37 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 if (isDestroyed) return@runOnUiThread
                 when (result) {
-                    is InitialAdoptionResult.Success -> showAdoptionComplete(result.value.itemsToUpload)
+                    is InitialAdoptionResult.Success -> {
+                        activePreview = null
+                        oneShotHomeMessage = if (result.value.itemsToUpload == 0L) {
+                            getString(R.string.no_new_items_found)
+                        } else {
+                            getString(
+                                R.string.backup_finished_format,
+                                UserFacingFormat.itemCount(result.value.itemsToUpload),
+                            )
+                        }
+                        loadExistingProfile(forceConnect = false)
+                    }
                     is InitialAdoptionResult.Failure -> {
-                        showAdoptionPreview(preview)
-                        binding.adoptionPreviewError.visibility = View.VISIBLE
-                        binding.adoptionPreviewError.setText(adoptionErrorMessage(result.error))
+                        if (previewPurpose == PreviewPurpose.NORMAL_BACKUP) {
+                            val status = if (result.error == InitialAdoptionError.CANCELLED) {
+                                HomeBackupStatus.PAUSED
+                            } else {
+                                HomeBackupStatus.NEEDS_ATTENTION
+                            }
+                            oneShotHomeMessage = getString(adoptionErrorMessage(result.error))
+                            showHome(
+                                requireNotNull(latestHomeState).copy(
+                                    status = status,
+                                    progressPercentage = null,
+                                ),
+                            )
+                        } else {
+                            showAdoptionPreview(preview)
+                            binding.adoptionPreviewError.visibility = View.VISIBLE
+                            binding.adoptionPreviewError.setText(adoptionErrorMessage(result.error))
+                        }
                     }
                 }
             }
@@ -496,6 +737,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showTransferProgress(progress: AdoptionTransferProgress) {
+        if (previewPurpose == PreviewPurpose.NORMAL_BACKUP) {
+            showHome(
+                requireNotNull(latestHomeState).copy(
+                    status = HomeBackupStatus.BACKING_UP,
+                    progressPercentage = progress.percentage,
+                ),
+            )
+            return
+        }
         binding.adoptionTransferProgress.setProgressCompat(progress.percentage, true)
         binding.adoptionTransferStatus.text = getString(
             R.string.adoption_progress_format,
@@ -506,21 +756,39 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    private fun showAdoptionComplete(uploadedItems: Long?) {
-        activePreview = null
-        showOnly(binding.adoptionCompleteGroup)
-        binding.adoptionCompleteSummary.text = if (uploadedItems == null) {
-            getString(R.string.initial_backup_complete)
-        } else {
-            getString(R.string.adoption_complete_format, UserFacingFormat.itemCount(uploadedItems))
+    private fun checkForNewFiles() {
+        if (draftMappings.isEmpty()) {
+            showMappingSetup()
+            return
+        }
+        beginAdoptionPreview()
+    }
+
+    private fun handleHomePrimaryAction() {
+        when (latestHomeState?.status) {
+            HomeBackupStatus.NEW_ITEMS_READY,
+            HomeBackupStatus.PAUSED,
+            -> beginConfirmedAdoption()
+            HomeBackupStatus.BACKING_UP -> {
+                binding.homeGroup.homeBackupButton.isEnabled = false
+                app.initialAdoptionCoordinator.cancel()
+            }
+            HomeBackupStatus.LOOKING_FOR_CHANGES -> Unit
+            HomeBackupStatus.EVERYTHING_BACKED_UP,
+            HomeBackupStatus.NEEDS_ATTENTION,
+            null,
+            -> checkForNewFiles()
         }
     }
 
-    private fun checkForNewFiles() {
-        showMappingSetup()
-        if (Environment.isExternalStorageManager() && draftMappings.isNotEmpty()) {
-            beginAdoptionPreview()
-        }
+    private fun automaticUploadEnabled(): Boolean =
+        preferences.getBoolean(AUTOMATIC_UPLOAD_KEY, false)
+
+    private fun formatDateTime(epochMillis: Long): String {
+        val date = Date(epochMillis)
+        val dateText = android.text.format.DateFormat.getMediumDateFormat(this).format(date)
+        val timeText = android.text.format.DateFormat.getTimeFormat(this).format(date)
+        return getString(R.string.date_time_format, dateText, timeText)
     }
 
     private fun showAdoptionError(error: InitialAdoptionError) {
@@ -544,6 +812,7 @@ class MainActivity : AppCompatActivity() {
         binding.connectButton.isEnabled = !busy
         binding.usernameInput.isEnabled = !busy
         binding.passwordInput.isEnabled = !busy
+        binding.remoteBasePathInput.isEnabled = !busy
         binding.advancedHostnameToggle.isEnabled = !busy
         binding.hostnameInput.isEnabled = !busy
         binding.connectProgress.visibility = if (busy) View.VISIBLE else View.GONE
@@ -591,12 +860,13 @@ class MainActivity : AppCompatActivity() {
     private fun showOnly(visible: View) {
         listOf(
             binding.welcomeGroup,
+            binding.homeGroup.root,
+            binding.settingsGroup.root,
             binding.connectGroup,
             binding.connectedGroup,
             binding.adoptionMappingGroup,
             binding.adoptionPreviewGroup,
             binding.adoptionTransferGroup,
-            binding.adoptionCompleteGroup,
         ).forEach { it.visibility = if (it === visible) View.VISIBLE else View.GONE }
     }
 
@@ -630,10 +900,18 @@ class MainActivity : AppCompatActivity() {
         val profile: StorageBoxProfileEntity?,
         val mappings: List<FolderMappingEntity>,
         val hasCheckpoint: Boolean,
+        val lastSuccessfulBackupAtEpochMillis: Long?,
     )
+
+    private enum class PreviewPurpose {
+        INITIAL_ADOPTION,
+        NORMAL_BACKUP,
+    }
 
     private companion object {
         const val HETZNER_CONSOLE_URL = "https://console.hetzner.com/"
         const val PRIMARY_VOLUME = "external_primary"
+        const val PREFERENCES_NAME = "piffbackup-user-settings"
+        const val AUTOMATIC_UPLOAD_KEY = "automatic-upload-after-discovery"
     }
 }

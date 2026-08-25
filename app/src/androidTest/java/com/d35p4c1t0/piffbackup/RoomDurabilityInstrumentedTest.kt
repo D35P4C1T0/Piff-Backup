@@ -76,6 +76,7 @@ class RoomDurabilityInstrumentedTest {
         assertEquals(PendingJobStatusValue.SUCCEEDED, completed.job.status)
         assertEquals(20L, fixture.store.checkpointForPlanning(PROFILE_ID, VOLUME)?.successfulGeneration)
         assertEquals(1, fixture.database.dao().backupRuns().size)
+        assertEquals(completed.job.id, fixture.store.latestSuccessfulRun(PROFILE_ID)?.id)
         val listPaths = completed.roots.map { File(it.fileListPath) }
         assertTrue(listPaths.all { it.exists() })
 

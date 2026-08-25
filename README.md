@@ -3,8 +3,8 @@
 PiffBackup is an Android 13+ one-way media backup app for a private Hetzner
 Storage Box. Development follows `reference/PROJECT.MD` phase by phase.
 
-Current status: Phases 1–6 are complete, and the first Phase 7 navigation slice
-is implemented. The project builds a single `arm64-v8a` APK, includes
+Current status: Phases 1–7 are complete. The project builds a single
+`arm64-v8a` APK, includes
 reproducibly built rsync and strict SSH tools, turns bounded MediaStore
 generation changes into streamed NUL-delimited file lists, and persists
 immutable pending work and checkpoints across process death. The app performs
@@ -12,9 +12,10 @@ password-once SSH key installation, Android Keystore-backed credential
 protection, strict host-key pinning, and read-only verification of the backup
 root explicitly entered by the user. Users can choose non-overlapping local
 folders, map them beneath that root, preview the existing collection with
-actual rsync, and explicitly confirm the initial one-way upload. After success
-they can check the saved mappings again, change folders, or change the
-connection. The broader home/history UI and background execution remain.
+actual rsync, and explicitly confirm the initial one-way upload. Completed
+setups open on a minimal home screen with live status, one-tap discovery,
+last-success time, dynamic folder management, and settings. Background UIDT
+and WorkManager execution remains Phase 8.
 
 ## Build
 
@@ -47,7 +48,8 @@ recovery semantics are recorded in `PHASE4_ROOM_DURABILITY.md`. See
 `PHASE5_HETZNER_ONBOARDING.md` for onboarding security, harmless verification,
 and live-device validation. Phase 6 storage access, mapping, preview,
 confirmation, interruption, and completion navigation are recorded in
-`PHASE6_INITIAL_ADOPTION.md`. The first real transfer measurement and its
+`PHASE6_INITIAL_ADOPTION.md`. Phase 7 home, folder, and settings behavior is
+recorded in `PHASE7_MINIMAL_UI.md`. The first real transfer measurement and its
 limitations are recorded in `PERFORMANCE.md`.
 
 ## Safety and privacy

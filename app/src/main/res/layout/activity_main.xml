@@ -39,6 +39,14 @@
                 android:text="@string/set_up_backup" />
         </LinearLayout>
 
+        <include
+            android:id="@+id/home_group"
+            layout="@layout/view_home" />
+
+        <include
+            android:id="@+id/settings_group"
+            layout="@layout/view_settings" />
+
         <LinearLayout
             android:id="@+id/connect_group"
             android:layout_width="match_parent"
@@ -260,6 +268,16 @@
                 android:text="@string/choose_backup_folders"
                 android:textAppearance="?attr/textAppearanceHeadlineMedium" />
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/folders_back_button"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:minHeight="48dp"
+                android:text="@string/back_to_home"
+                android:visibility="gone" />
+
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -290,6 +308,13 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="20dp"
                 android:textAppearance="?attr/textAppearanceBodyLarge" />
+
+            <LinearLayout
+                android:id="@+id/configured_mapping_actions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/clear_mappings_button"
@@ -460,6 +485,7 @@
             android:visibility="gone">
 
             <TextView
+                android:id="@+id/adoption_preview_title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/existing_backup_checked"
@@ -482,6 +508,7 @@
                 android:visibility="gone" />
 
             <TextView
+                android:id="@+id/preview_explanation"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
@@ -504,6 +531,16 @@
                 android:layout_marginTop="12dp"
                 android:minHeight="48dp"
                 android:text="@string/change_folders" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/preview_back_home_button"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:minHeight="48dp"
+                android:text="@string/back_to_home"
+                android:visibility="gone" />
         </LinearLayout>
 
         <LinearLayout
@@ -544,51 +581,5 @@
                 android:text="@string/cancel_backup" />
         </LinearLayout>
 
-        <LinearLayout
-            android:id="@+id/adoption_complete_group"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:visibility="gone">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/everything_backed_up"
-                android:textAppearance="?attr/textAppearanceHeadlineMedium" />
-
-            <TextView
-                android:id="@+id/adoption_complete_summary"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:textAppearance="?attr/textAppearanceBodyLarge" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/backup_again_button"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                android:minHeight="48dp"
-                android:text="@string/check_for_new_files" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/complete_change_mappings_button"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:minHeight="48dp"
-                android:text="@string/change_folders" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/complete_change_connection_button"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:minHeight="48dp"
-                android:text="@string/change_connection" />
-        </LinearLayout>
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

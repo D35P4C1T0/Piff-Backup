@@ -103,6 +103,16 @@ interface PiffBackupDao {
     @Query("SELECT * FROM backup_runs ORDER BY finishedAtEpochMillis, id")
     suspend fun backupRuns(): List<BackupRunEntity>
 
+    @Query(
+        """
+        SELECT * FROM backup_runs
+        WHERE profileId = :profileId AND result = 'SUCCEEDED'
+        ORDER BY finishedAtEpochMillis DESC, id DESC
+        LIMIT 1
+        """,
+    )
+    suspend fun latestSuccessfulBackupRun(profileId: String): BackupRunEntity?
+
     @Upsert
     suspend fun upsertLocalMetadata(metadata: List<LocalFileMetadataEntity>)
 

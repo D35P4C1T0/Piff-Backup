@@ -93,18 +93,13 @@ The app reached successful completion and persisted the result. This was a
 normal user-confirmed one-way upload; neither the test nor the app deleted
 remote files. See `PERFORMANCE.md` for the measurement conditions and caveats.
 
-The successful completion screen is no longer terminal. It now offers:
-
-- `Check for new files`, which reuses the saved mappings and enters the safe
-  preview flow;
-- `Change folders`; and
-- `Change connection`.
+Phase 7 replaced the temporary successful-completion screen with the normal
+home screen. It reuses saved mappings for one-tap discovery and exposes folders
+and settings as separate navigation rows.
 
 ## Deferred to later phases
 
-- Phase 7 still needs the broader home/history/settings experience. Its first
-  navigation slice is complete: users can leave successful completion and
-  revisit preview, folders, or connection settings.
+- Phase 7 completed the minimal home, folder-management, and settings UI.
 - Phase 8 moves potentially long preview/transfer work into supported UIDT or
   WorkManager execution with durable pending adoption state. Phase 6's current
   foreground execution is cancellation- and retry-safe, but it does not claim

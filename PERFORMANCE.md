@@ -44,6 +44,11 @@ release APK of 4,019,362 bytes and an unminified debug APK of 25,502,264 bytes.
 These are reproducible artifact sizes, not runtime or transfer-performance
 claims.
 
+The Phase 7 build on 2026-08-25 produced an unsigned, R8-minified ARM64 release
+APK of 4,080,343 bytes and an unminified debug APK of 25,691,940 bytes. The
+increase contains the complete Home, folder-management, Settings, English, and
+Italian UI slice.
+
 ## Next experiments
 
 1. Capture internal planning, rsync startup, transfer, cancellation, and resume

@@ -376,6 +376,9 @@ class DurableBackupStore(
         return DurablePendingJob(job, dao.rootWork(jobId))
     }
 
+    suspend fun latestSuccessfulRun(profileId: String): BackupRunEntity? =
+        dao.latestSuccessfulBackupRun(profileId)
+
     private suspend fun completeJob(
         job: PendingBackupJobEntity,
         roots: List<PendingRootWorkEntity>,
