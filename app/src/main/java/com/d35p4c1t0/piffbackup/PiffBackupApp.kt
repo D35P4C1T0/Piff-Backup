@@ -2,6 +2,7 @@ package com.d35p4c1t0.piffbackup
 
 import android.app.Application
 import android.os.Environment
+import androidx.work.Configuration
 import com.d35p4c1t0.piffbackup.adoption.InitialAdoptionCoordinator
 import com.d35p4c1t0.piffbackup.adoption.InitialFileListPlanner
 import com.d35p4c1t0.piffbackup.adoption.NativeAdoptionRsyncExecutor
@@ -19,10 +20,19 @@ import com.d35p4c1t0.piffbackup.onboarding.SshjPasswordKeyInstaller
 import com.d35p4c1t0.piffbackup.media.AndroidMediaStoreSource
 import com.d35p4c1t0.piffbackup.media.IncrementalFileListStore
 import com.d35p4c1t0.piffbackup.security.EncryptedCredentialVault
+import com.d35p4c1t0.piffbackup.scheduling.BackupExecutor
+import com.d35p4c1t0.piffbackup.scheduling.BackupNotifications
+import com.d35p4c1t0.piffbackup.scheduling.BackupScheduler
+import com.d35p4c1t0.piffbackup.scheduling.IncrementalBackupCoordinator
 import com.google.android.material.color.DynamicColors
 import java.io.File
 
-class PiffBackupApp : Application() {
+class PiffBackupApp : Application(), Configuration.Provider {
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setJobSchedulerJobIdRange(WORK_MANAGER_JOB_ID_MIN, WORK_MANAGER_JOB_ID_MAX)
+            .build()
+
     val database: PiffBackupDatabase by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         PiffBackupDatabase.open(applicationContext)
     }
@@ -72,7 +82,30 @@ class PiffBackupApp : Application() {
     }
 
     val adoptionFileLists: IncrementalFileListStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        IncrementalFileListStore(File(noBackupFilesDir, "adoption-file-lists"))
+        IncrementalFileListStore(File(noBackupFilesDir, "incremental-file-lists"))
+    }
+
+    val incrementalBackupCoordinator: IncrementalBackupCoordinator by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        IncrementalBackupCoordinator(
+            configuration = configurationStore,
+            durableBackup = durableBackupStore,
+            mediaSource = AndroidMediaStoreSource(applicationContext),
+            fileLists = adoptionFileLists,
+        )
+    }
+
+    val backupExecutor: BackupExecutor by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        BackupExecutor(
+            context = applicationContext,
+            configuration = configurationStore,
+            durableBackup = durableBackupStore,
+            credentials = onboardingCredentials,
+            knownHosts = knownHostStore,
+        )
+    }
+
+    val backupScheduler: BackupScheduler by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        BackupScheduler(applicationContext, durableBackupStore, backupExecutor)
     }
 
     val initialAdoptionCoordinator: InitialAdoptionCoordinator by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
@@ -96,7 +129,14 @@ class PiffBackupApp : Application() {
         super.onCreate()
         runCatching { credentialVault.cleanupAbandonedTemporaryKeys() }
         runCatching { onboardingCredentials.cleanupAbandonedGeneratedKeys() }
-        runCatching { adoptionFileLists.cleanupExactTemporaryLists() }
+        runCatching { kotlinx.coroutines.runBlocking { durableBackupStore.recoverOnLaunch() } }
+        runCatching { kotlinx.coroutines.runBlocking { durableBackupStore.cleanupOrphanedFileLists() } }
+        BackupNotifications.createChannel(this)
         DynamicColors.applyToActivitiesIfAvailable(this)
+    }
+
+    private companion object {
+        const val WORK_MANAGER_JOB_ID_MIN = 42_000
+        const val WORK_MANAGER_JOB_ID_MAX = 42_999
     }
 }

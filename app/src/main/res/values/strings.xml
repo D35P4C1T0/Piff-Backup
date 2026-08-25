@@ -98,6 +98,11 @@
     <string name="everything_backed_up">Everything is backed up</string>
     <string name="no_new_items_found">No new or changed items were found.</string>
     <string name="backup_finished_format">%1$s items were backed up successfully.</string>
+    <string name="backup_notification_channel">Active backups</string>
+    <string name="backup_notification_channel_description">Progress and controls for a backup you started</string>
+    <string name="backup_notification_title">PiffBackup is backing up your files</string>
+    <string name="notification_permission_needed">Allow backup notifications so progress and Pause remain available while the app is in the background.</string>
+    <string name="backup_could_not_start">The background backup could not start. Your pending work is safe; tap Resume to retry.</string>
     <string name="adoption_error_invalid">Check the selected phone and Storage Box folders. Folders cannot overlap.</string>
     <string name="adoption_error_permission">Allow folder access before checking the backup.</string>
     <string name="adoption_error_preview">The existing backup could not be checked safely. Nothing was uploaded.</string>

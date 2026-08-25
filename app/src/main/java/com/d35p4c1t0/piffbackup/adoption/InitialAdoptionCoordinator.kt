@@ -6,6 +6,9 @@ import com.d35p4c1t0.piffbackup.data.DurableBackupStore
 import com.d35p4c1t0.piffbackup.data.DurableConfigurationStore
 import com.d35p4c1t0.piffbackup.data.FolderMappingEntity
 import com.d35p4c1t0.piffbackup.data.FolderMappingInput
+import com.d35p4c1t0.piffbackup.data.PendingBackupJobDraft
+import com.d35p4c1t0.piffbackup.data.PendingRootDraft
+import com.d35p4c1t0.piffbackup.data.DurablePendingJob
 import com.d35p4c1t0.piffbackup.media.MediaAccessScope
 import com.d35p4c1t0.piffbackup.media.MediaStoreCheckpoint
 import com.d35p4c1t0.piffbackup.media.MediaStoreSnapshot
@@ -22,6 +25,7 @@ import com.d35p4c1t0.piffbackup.rsync.RsyncExitKind
 import com.d35p4c1t0.piffbackup.rsync.RsyncProgress
 import com.d35p4c1t0.piffbackup.rsync.RunningRsyncCommand
 import com.d35p4c1t0.piffbackup.rsync.StrictSshConfig
+import com.d35p4c1t0.piffbackup.scheduling.BackupJobKind
 import java.io.File
 import java.util.UUID
 
@@ -146,7 +150,12 @@ class InitialAdoptionCoordinator(
             if (!profileBefore.setupCompleted || profileBefore.encryptedCredentialRef == null) {
                 return InitialAdoptionResult.Failure(InitialAdoptionError.INVALID_CONFIGURATION)
             }
-            val entities = configuration.replaceMappings(profileId, mappings)
+            val existingMappings = configuration.mappings(profileId)
+            val entities = if (mappingInputsMatch(mappings, existingMappings)) {
+                existingMappings
+            } else {
+                configuration.replaceMappings(profileId, mappings)
+            }
             val profile = requireNotNull(configuration.profile(profileId))
             val snapshot = try {
                 mediaSource.snapshot(VOLUME_NAME)
@@ -277,6 +286,53 @@ class InitialAdoptionCoordinator(
         }
     }
 
+    /** Transfers ownership of a later reconciliation preview to durable background work. */
+    suspend fun prepareDurableConfirmation(
+        previewId: String,
+    ): InitialAdoptionResult<DurablePendingJob> {
+        val preview = currentPreview?.takeIf { it.id == previewId }
+            ?: return InitialAdoptionResult.Failure(InitialAdoptionError.CONFIGURATION_CHANGED)
+        return try {
+            require(preview.summary.itemsToUpload > 0L)
+            val profile = configuration.profile(preview.profileId)
+                ?: throw AdoptionOperationException(InitialAdoptionError.CONFIGURATION_CHANGED)
+            require(profile.configurationRevision == preview.configurationRevision)
+            val checkpoint = durableBackup.checkpointForPlanning(preview.profileId, preview.snapshot.volumeName)
+                ?: throw AdoptionOperationException(InitialAdoptionError.CONFIGURATION_CHANGED)
+            require(checkpoint.version == preview.snapshot.version)
+            require(preview.snapshot.generation >= checkpoint.successfulGeneration)
+            val retainedRoots = preview.roots.filter { it.summary.itemsToUpload > 0L }
+            val pending = durableBackup.persistPendingJob(
+                PendingBackupJobDraft(
+                    id = BackupJobKind.reconciliationId(preview.id),
+                    profileId = preview.profileId,
+                    volumeName = preview.snapshot.volumeName,
+                    mediaStoreVersion = preview.snapshot.version,
+                    configurationRevision = preview.configurationRevision,
+                    previousGeneration = checkpoint.successfulGeneration,
+                    targetGeneration = preview.snapshot.generation,
+                    roots = retainedRoots.map { root ->
+                        PendingRootDraft(
+                            folderMappingId = root.files.entity.id,
+                            fileListPath = root.files.file.path,
+                            totalFiles = root.summary.itemsToUpload,
+                            totalBytes = root.summary.bytesToUpload,
+                        )
+                    },
+                ),
+            )
+            preview.roots.filterNot { it in retainedRoots }.forEach { root ->
+                runCatching { root.files.file.delete() }
+            }
+            currentPreview = null
+            InitialAdoptionResult.Success(pending)
+        } catch (failure: AdoptionOperationException) {
+            InitialAdoptionResult.Failure(failure.error)
+        } catch (_: Exception) {
+            InitialAdoptionResult.Failure(InitialAdoptionError.CONFIGURATION_CHANGED)
+        }
+    }
+
     fun cancel() = rsync.cancel()
 
     fun currentPreview(): InitialAdoptionPreview? = currentPreview
@@ -310,6 +366,22 @@ class InitialAdoptionCoordinator(
         actual: List<FolderMappingEntity>,
     ): Boolean = expected.associate { it.id to mappingIdentity(it) } ==
         actual.associate { it.id to mappingIdentity(it) }
+
+    private fun mappingInputsMatch(
+        expected: List<FolderMappingInput>,
+        actual: List<FolderMappingEntity>,
+    ): Boolean = expected.associate { input ->
+        input.id to listOf(
+            input.id,
+            input.displayName,
+            input.treeUri,
+            File(input.canonicalLocalPath).canonicalPath,
+            input.relativeMediaStorePrefix.trimEnd('/').let { if (it.isEmpty()) "" else "$it/" },
+            RemoteRelativePath.create(input.relativeRemotePath).value,
+            input.mode,
+            input.enabled.toString(),
+        )
+    } == actual.associate { it.id to mappingIdentity(it) }
 
     private fun mappingIdentity(mapping: FolderMappingEntity): List<String> = listOf(
         mapping.id,

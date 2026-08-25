@@ -50,18 +50,27 @@ class RsyncCommandBuilder(
     fun incrementalTransfer(
         transfer: PlannedMediaTransfer,
         ssh: StrictSshConfig,
+    ): RsyncCommand = incrementalTransfer(
+        mapping = transfer.mapping.mapping,
+        fileList = transfer.fileList,
+        ssh = ssh,
+    )
+
+    fun incrementalTransfer(
+        mapping: BackupMapping,
+        fileList: java.io.File,
+        ssh: StrictSshConfig,
     ): RsyncCommand {
-        val mapping = transfer.mapping.mapping
         validateMappingAndLocalRoot(mapping)
-        require(transfer.fileList.isAbsolute) { "Incremental file list must be absolute" }
-        require(transfer.fileList.isFile && transfer.fileList.canRead() && transfer.fileList.length() > 0L) {
+        require(fileList.isAbsolute) { "Incremental file list must be absolute" }
+        require(fileList.isFile && fileList.canRead() && fileList.length() > 0L) {
             "Incremental file list must be readable and non-empty"
         }
         val options = mutableListOf(
             rsyncExecutable.path,
             "-rlt",
             "--from0",
-            "--files-from=${transfer.fileList.path}",
+            "--files-from=${fileList.path}",
             "--whole-file",
             "--partial",
             "--partial-dir=.rsync-partial",

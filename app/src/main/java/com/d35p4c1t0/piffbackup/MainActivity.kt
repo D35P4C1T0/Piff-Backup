@@ -1,6 +1,8 @@
 package com.d35p4c1t0.piffbackup
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
@@ -26,7 +28,10 @@ import com.d35p4c1t0.piffbackup.backup.RemoteRelativePath
 import com.d35p4c1t0.piffbackup.backup.UserFacingFormat
 import com.d35p4c1t0.piffbackup.data.FolderMappingEntity
 import com.d35p4c1t0.piffbackup.data.FolderMappingInput
+import com.d35p4c1t0.piffbackup.data.DurablePendingJob
 import com.d35p4c1t0.piffbackup.data.MappingModeValue
+import com.d35p4c1t0.piffbackup.data.PendingBackupJobEntity
+import com.d35p4c1t0.piffbackup.data.PendingJobStatusValue
 import com.d35p4c1t0.piffbackup.data.StorageBoxProfileEntity
 import com.d35p4c1t0.piffbackup.databinding.ActivityMainBinding
 import com.d35p4c1t0.piffbackup.onboarding.HostKeyPin
@@ -35,6 +40,10 @@ import com.d35p4c1t0.piffbackup.onboarding.OnboardingProgress
 import com.d35p4c1t0.piffbackup.onboarding.OnboardingRequest
 import com.d35p4c1t0.piffbackup.onboarding.OnboardingResult
 import com.d35p4c1t0.piffbackup.onboarding.StorageBoxEndpoint
+import com.d35p4c1t0.piffbackup.scheduling.BackupDiscoveryResult
+import com.d35p4c1t0.piffbackup.scheduling.BackupProgressEvent
+import com.d35p4c1t0.piffbackup.scheduling.BackupProgressEvents
+import com.d35p4c1t0.piffbackup.scheduling.BackupProgressStatus
 import com.d35p4c1t0.piffbackup.ui.HomeBackupStatus
 import com.d35p4c1t0.piffbackup.ui.HomeScreenState
 import com.google.android.material.button.MaterialButton
@@ -58,6 +67,32 @@ class MainActivity : AppCompatActivity() {
     private var hasCompletedAdoption = false
     private var latestHomeState: HomeScreenState? = null
     private var oneShotHomeMessage: String? = null
+    private var activePendingJobId: String? = null
+    private var jobAwaitingNotificationPermission: String? = null
+
+    private val backupProgressListener: (BackupProgressEvent) -> Unit = { event ->
+        runOnUiThread {
+            if (!isDestroyed && event.jobId == activePendingJobId) {
+                when (event.status) {
+                    BackupProgressStatus.RUNNING -> latestHomeState?.let { state ->
+                        showHome(
+                            state.copy(
+                                status = HomeBackupStatus.BACKING_UP,
+                                progressPercentage = event.percentage,
+                            ),
+                        )
+                    }
+                    BackupProgressStatus.PAUSED -> loadExistingProfile(forceConnect = false)
+                    BackupProgressStatus.SUCCEEDED -> loadExistingProfile(forceConnect = false)
+                    BackupProgressStatus.FAILED -> {
+                        latestHomeState?.let { state ->
+                            showHome(state.copy(status = HomeBackupStatus.NEEDS_ATTENTION, progressPercentage = null))
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     private val preferences by lazy {
         getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE)
@@ -65,6 +100,19 @@ class MainActivity : AppCompatActivity() {
 
     private val storageSettings = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         updateStorageAccessState()
+    }
+
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        val jobId = jobAwaitingNotificationPermission
+        jobAwaitingNotificationPermission = null
+        if (it && jobId != null) {
+            schedulePendingBackup(jobId)
+        } else if (jobId != null) {
+            oneShotHomeMessage = getString(R.string.notification_permission_needed)
+            latestHomeState?.let { state ->
+                showHome(state.copy(status = HomeBackupStatus.NEEDS_ATTENTION, progressPercentage = null))
+            }
+        }
     }
 
     private val folderPicker = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -163,7 +211,16 @@ class MainActivity : AppCompatActivity() {
                     app.durableBackupStore.checkpointForPlanning(it.id, PRIMARY_VOLUME)
                 }
                 val lastSuccessfulRun = profile?.let { app.durableBackupStore.latestSuccessfulRun(it.id) }
-                ExistingState(profile, mappings, checkpoint != null, lastSuccessfulRun?.finishedAtEpochMillis)
+                val pending = profile?.let { app.durableBackupStore.activeJob(it.id) }
+                val problem = profile?.let { app.durableBackupStore.latestProblemJob(it.id) }
+                ExistingState(
+                    profile,
+                    mappings,
+                    checkpoint != null,
+                    lastSuccessfulRun?.finishedAtEpochMillis,
+                    pending,
+                    problem,
+                )
             }
             runOnUiThread {
                 if (isDestroyed) return@runOnUiThread
@@ -171,6 +228,7 @@ class MainActivity : AppCompatActivity() {
                 draftMappings.clear()
                 draftMappings += state.mappings.map(::mappingInput)
                 hasCompletedAdoption = state.lastSuccessfulBackupAtEpochMillis != null || state.hasCheckpoint
+                activePendingJobId = state.pending?.job?.id
                 val profile = state.profile
                 if (!forceConnect && profile?.setupCompleted == true) {
                     val pin = runCatching { HostKeyPin.parse(requireNotNull(profile.pinnedHostKey)) }.getOrNull()
@@ -184,13 +242,7 @@ class MainActivity : AppCompatActivity() {
                             }
                             showAdoptionPreview(requireNotNull(app.initialAdoptionCoordinator.currentPreview()))
                         }
-                        hasCompletedAdoption -> showHome(
-                            HomeScreenState.loaded(
-                                mappingCount = state.mappings.count { it.enabled },
-                                lastSuccessfulBackupAtEpochMillis = state.lastSuccessfulBackupAtEpochMillis,
-                                hasCurrentCheckpoint = state.hasCheckpoint,
-                            ),
-                        )
+                        hasCompletedAdoption -> showHome(homeState(state))
                         else -> showConnected(profile, pin.sha256Fingerprint)
                     }
                 } else if (profile != null && (!profile.setupCompleted || forceConnect)) {
@@ -259,6 +311,44 @@ class MainActivity : AppCompatActivity() {
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         showOnly(binding.homeGroup.root)
         renderHomeState(state)
+    }
+
+    private fun homeState(state: ExistingState): HomeScreenState {
+        val pending = state.pending?.job
+        val mappingCount = state.mappings.count { it.enabled }
+        if (pending != null) {
+            val percentage = if (pending.totalBytes > 0L) {
+                ((pending.completedBytes * 100L) / pending.totalBytes).toInt().coerceIn(0, 100)
+            } else {
+                0
+            }
+            return HomeScreenState(
+                status = when (pending.status) {
+                    PendingJobStatusValue.RUNNING -> HomeBackupStatus.BACKING_UP
+                    PendingJobStatusValue.PAUSED,
+                    PendingJobStatusValue.RETRYABLE,
+                    -> HomeBackupStatus.PAUSED
+                    else -> HomeBackupStatus.NEW_ITEMS_READY
+                },
+                mappingCount = mappingCount,
+                lastSuccessfulBackupAtEpochMillis = state.lastSuccessfulBackupAtEpochMillis,
+                changedItems = pending.totalFiles,
+                changedBytes = pending.totalBytes,
+                progressPercentage = if (pending.status == PendingJobStatusValue.RUNNING) percentage else null,
+            )
+        }
+        if (state.problem != null) {
+            return HomeScreenState(
+                status = HomeBackupStatus.NEEDS_ATTENTION,
+                mappingCount = mappingCount,
+                lastSuccessfulBackupAtEpochMillis = state.lastSuccessfulBackupAtEpochMillis,
+            )
+        }
+        return HomeScreenState.loaded(
+            mappingCount = mappingCount,
+            lastSuccessfulBackupAtEpochMillis = state.lastSuccessfulBackupAtEpochMillis,
+            hasCurrentCheckpoint = state.hasCheckpoint,
+        )
     }
 
     private fun renderHomeState(state: HomeScreenState) {
@@ -761,23 +851,125 @@ class MainActivity : AppCompatActivity() {
             showMappingSetup()
             return
         }
-        beginAdoptionPreview()
+        val profile = activeProfile ?: return
+        showHome(
+            requireNotNull(latestHomeState).copy(
+                status = HomeBackupStatus.LOOKING_FOR_CHANGES,
+                changedItems = 0L,
+                changedBytes = 0L,
+                progressPercentage = null,
+            ),
+        )
+        executor.execute {
+            val result = runBlocking { app.incrementalBackupCoordinator.discover(profile.id) }
+            runOnUiThread {
+                if (isDestroyed) return@runOnUiThread
+                when (result) {
+                    is BackupDiscoveryResult.Ready -> {
+                        activePendingJobId = result.pending.job.id
+                        showHome(
+                            requireNotNull(latestHomeState).copy(
+                                status = HomeBackupStatus.NEW_ITEMS_READY,
+                                changedItems = result.pending.job.totalFiles,
+                                changedBytes = result.pending.job.totalBytes,
+                                progressPercentage = null,
+                            ),
+                        )
+                        if (automaticUploadEnabled()) schedulePendingBackup(result.pending.job.id)
+                    }
+                    BackupDiscoveryResult.UpToDate -> {
+                        oneShotHomeMessage = getString(R.string.no_new_items_found)
+                        loadExistingProfile(forceConnect = false)
+                    }
+                    BackupDiscoveryResult.RequiresReconciliation -> beginAdoptionPreview()
+                    BackupDiscoveryResult.Failed -> {
+                        oneShotHomeMessage = getString(R.string.adoption_error_preview)
+                        showHome(
+                            requireNotNull(latestHomeState).copy(
+                                status = HomeBackupStatus.NEEDS_ATTENTION,
+                                progressPercentage = null,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
     }
 
     private fun handleHomePrimaryAction() {
         when (latestHomeState?.status) {
-            HomeBackupStatus.NEW_ITEMS_READY,
-            HomeBackupStatus.PAUSED,
-            -> beginConfirmedAdoption()
+            HomeBackupStatus.NEW_ITEMS_READY -> {
+                activePendingJobId?.let(::schedulePendingBackup) ?: prepareDurablePreviewOrTransfer()
+            }
+            HomeBackupStatus.PAUSED -> {
+                activePendingJobId?.let(::schedulePendingBackup) ?: beginConfirmedAdoption()
+            }
             HomeBackupStatus.BACKING_UP -> {
                 binding.homeGroup.homeBackupButton.isEnabled = false
-                app.initialAdoptionCoordinator.cancel()
+                val jobId = activePendingJobId
+                if (jobId == null) {
+                    app.initialAdoptionCoordinator.cancel()
+                } else {
+                    executor.execute {
+                        runBlocking { app.backupScheduler.pause(jobId) }
+                        runOnUiThread { if (!isDestroyed) loadExistingProfile(forceConnect = false) }
+                    }
+                }
             }
             HomeBackupStatus.LOOKING_FOR_CHANGES -> Unit
             HomeBackupStatus.EVERYTHING_BACKED_UP,
             HomeBackupStatus.NEEDS_ATTENTION,
             null,
             -> checkForNewFiles()
+        }
+    }
+
+    private fun prepareDurablePreviewOrTransfer() {
+        val preview = activePreview ?: return
+        binding.homeGroup.homeBackupButton.isEnabled = false
+        executor.execute {
+            val result = runBlocking { app.initialAdoptionCoordinator.prepareDurableConfirmation(preview.id) }
+            runOnUiThread {
+                if (isDestroyed) return@runOnUiThread
+                when (result) {
+                    is InitialAdoptionResult.Success -> {
+                        activePreview = null
+                        activePendingJobId = result.value.job.id
+                        schedulePendingBackup(result.value.job.id)
+                    }
+                    is InitialAdoptionResult.Failure -> {
+                        binding.homeGroup.homeBackupButton.isEnabled = true
+                        // A checkpoint reset cannot be represented by the incremental durable record.
+                        // The already-confirmed reconciliation remains safe in the activity path.
+                        beginConfirmedAdoption()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun schedulePendingBackup(jobId: String) {
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            jobAwaitingNotificationPermission = jobId
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
+        }
+        executor.execute {
+            val pending = runBlocking { app.durableBackupStore.pendingJob(jobId) }
+            val scheduled = pending != null && app.backupScheduler.schedule(jobId, pending.job.totalBytes)
+            runOnUiThread {
+                if (isDestroyed) return@runOnUiThread
+                if (scheduled) {
+                    latestHomeState?.let { state ->
+                        showHome(state.copy(status = HomeBackupStatus.BACKING_UP, progressPercentage = 0))
+                    }
+                } else {
+                    oneShotHomeMessage = getString(R.string.backup_could_not_start)
+                    latestHomeState?.let { state ->
+                        showHome(state.copy(status = HomeBackupStatus.PAUSED, progressPercentage = null))
+                    }
+                }
+            }
         }
     }
 
@@ -888,6 +1080,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        BackupProgressEvents.addListener(backupProgressListener)
+    }
+
+    override fun onStop() {
+        BackupProgressEvents.removeListener(backupProgressListener)
+        super.onStop()
+    }
+
     override fun onDestroy() {
         binding.passwordInput.text?.clear()
         app.initialAdoptionCoordinator.cancel()
@@ -901,6 +1103,8 @@ class MainActivity : AppCompatActivity() {
         val mappings: List<FolderMappingEntity>,
         val hasCheckpoint: Boolean,
         val lastSuccessfulBackupAtEpochMillis: Long?,
+        val pending: DurablePendingJob?,
+        val problem: PendingBackupJobEntity?,
     )
 
     private enum class PreviewPurpose {

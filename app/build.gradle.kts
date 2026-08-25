@@ -63,6 +63,7 @@ dependencies {
     implementation(libs.androidx.room3.runtime)
     implementation(libs.androidx.sqlite.framework)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.work.runtime)
     implementation(libs.sshj)
     implementation(libs.slf4j.nop)
     ksp(libs.androidx.room3.compiler)

@@ -645,10 +645,12 @@ Implement in this order:
 8. **UIDT and WorkManager execution**.
 9. **Security, accessibility, localization, performance, and release hardening**.
 
-Current implementation status (2026-08-25): Phases 1–7 are implemented and
+Current implementation status (2026-08-25): Phases 1–8 are implemented and
 buildable. Completed setups open on the minimal home screen with status,
-one-tap discovery, last-success time, folder management, and settings. Phases
-8–9 remain pending. A user-driven live setup and initial upload succeeded on an
+one-tap discovery, last-success time, folder management, and settings. Manual
+transfers use API 34+ UIDT or the API 33 foreground WorkManager fallback, with
+notification progress and durable Pause/Resume. Phase 9 remains pending. A
+user-driven live setup and initial upload succeeded on an
 ARM64 Samsung SM-P610 using the explicit `Matteo/` development root;
 `PERFORMANCE.md` records the observed baseline and its limitations. No
 destructive remote test was performed.

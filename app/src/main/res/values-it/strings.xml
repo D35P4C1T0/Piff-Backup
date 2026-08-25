@@ -106,4 +106,9 @@
     <string name="adoption_error_transfer">Il backup si è interrotto prima del completamento. Il checkpoint non è avanzato; puoi riprovare in sicurezza.</string>
     <string name="adoption_error_cancelled">Backup annullato. Il checkpoint non è avanzato.</string>
     <string name="adoption_error_storage">Lo stato protetto del backup non è disponibile. Nessun checkpoint di successo è stato registrato.</string>
+    <string name="backup_notification_channel">Backup attivi</string>
+    <string name="backup_notification_channel_description">Avanzamento e controlli per un backup avviato da te</string>
+    <string name="backup_notification_title">PiffBackup sta salvando i tuoi file</string>
+    <string name="notification_permission_needed">Consenti le notifiche di backup per vedere l’avanzamento e usare Pausa mentre l’app è in background.</string>
+    <string name="backup_could_not_start">Impossibile avviare il backup in background. Il lavoro in attesa è al sicuro; tocca Riprendi per riprovare.</string>
 </resources>

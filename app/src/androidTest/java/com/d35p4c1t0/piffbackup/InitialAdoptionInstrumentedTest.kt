@@ -18,6 +18,7 @@ import com.d35p4c1t0.piffbackup.data.DurableBackupStore
 import com.d35p4c1t0.piffbackup.data.DurableConfigurationStore
 import com.d35p4c1t0.piffbackup.data.FolderMappingInput
 import com.d35p4c1t0.piffbackup.data.MappingModeValue
+import com.d35p4c1t0.piffbackup.data.PendingJobStatusValue
 import com.d35p4c1t0.piffbackup.data.PiffBackupDatabase
 import com.d35p4c1t0.piffbackup.data.StorageBoxProfileInput
 import com.d35p4c1t0.piffbackup.media.IncrementalFileListStore
@@ -156,6 +157,34 @@ class InitialAdoptionInstrumentedTest {
             assertTrue(fixture.database.dao().backupRuns().isEmpty())
             assertTrue(fixture.fileLists.listFiles().orEmpty().isNotEmpty())
             assertNotNull(fixture.coordinator.currentPreview())
+        } finally {
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun unchangedAllFilesPreviewCanBecomeDurableBackgroundWork() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val fixture = Fixture(context)
+        try {
+            fixture.initialize()
+            val initial = fixture.coordinator.preview(PROFILE_ID, fixture.mappingInputs)
+                as InitialAdoptionResult.Success
+            fixture.coordinator.confirm(initial.value.id)
+            val revision = fixture.configuration.profile(PROFILE_ID)?.configurationRevision
+
+            val later = fixture.coordinator.preview(PROFILE_ID, fixture.mappingInputs)
+                as InitialAdoptionResult.Success
+            val prepared = fixture.coordinator.prepareDurableConfirmation(later.value.id)
+                as InitialAdoptionResult.Success
+
+            assertEquals(revision, fixture.configuration.profile(PROFILE_ID)?.configurationRevision)
+            assertEquals(PendingJobStatusValue.PLANNED, prepared.value.job.status)
+            assertTrue(prepared.value.job.id.startsWith("reconciliation-"))
+            assertEquals(1L, prepared.value.job.totalFiles)
+            assertTrue(prepared.value.roots.single().let { File(it.fileListPath).isFile })
+            assertEquals(null, fixture.coordinator.currentPreview())
+            assertEquals(10L, fixture.store.checkpointForPlanning(PROFILE_ID, VOLUME)?.successfulGeneration)
         } finally {
             fixture.close()
         }

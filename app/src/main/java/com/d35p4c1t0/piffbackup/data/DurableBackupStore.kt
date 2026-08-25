@@ -371,9 +371,55 @@ class DurableBackupStore(
         return cleaned
     }
 
+    suspend fun cleanupOrphanedFileLists(): Int {
+        val referenced = dao.jobs().flatMap { job -> dao.rootWork(job.id) }
+            .mapNotNull { root -> runCatching { File(root.fileListPath).canonicalPath }.getOrNull() }
+            .toSet()
+        var deleted = 0
+        allowedFileListRoot.listFiles().orEmpty().forEach { candidate ->
+            val canonical = runCatching { candidate.canonicalFile }.getOrNull() ?: return@forEach
+            if (
+                canonical.parentFile == allowedFileListRoot &&
+                canonical.name.startsWith("piffbackup-") &&
+                canonical.name.endsWith(".from0") &&
+                canonical.path !in referenced &&
+                canonical.isFile &&
+                canonical.delete()
+            ) {
+                deleted++
+            }
+        }
+        return deleted
+    }
+
     suspend fun pendingJob(jobId: String): DurablePendingJob? {
         val job = dao.job(jobId) ?: return null
         return DurablePendingJob(job, dao.rootWork(jobId))
+    }
+
+    suspend fun activeJob(profileId: String): DurablePendingJob? {
+        val job = dao.activeJobs(profileId).singleOrNull() ?: return null
+        return DurablePendingJob(job, dao.rootWork(job.id))
+    }
+
+    suspend fun latestProblemJob(profileId: String): PendingBackupJobEntity? =
+        dao.latestProblemJob(profileId)
+
+    suspend fun markJobPaused(jobId: String): DurablePendingJob? = database.withWriteTransaction {
+        val job = dao.job(jobId) ?: return@withWriteTransaction null
+        if (job.status !in RUNNABLE_JOB_STATUSES) {
+            return@withWriteTransaction DurablePendingJob(job, dao.rootWork(jobId))
+        }
+        val roots = dao.rootWork(jobId)
+        if (roots.any { it.status == PendingRootStatusValue.RUNNING }) {
+            return@withWriteTransaction DurablePendingJob(job, roots)
+        }
+        val paused = job.copy(
+            status = PendingJobStatusValue.PAUSED,
+            updatedAtEpochMillis = checkedNow(),
+        )
+        check(dao.updateJob(paused) == 1) { "Pause update was lost" }
+        DurablePendingJob(paused, roots)
     }
 
     suspend fun latestSuccessfulRun(profileId: String): BackupRunEntity? =

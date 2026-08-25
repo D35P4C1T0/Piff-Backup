@@ -73,6 +73,16 @@ interface PiffBackupDao {
     )
     suspend fun activeJobs(profileId: String): List<PendingBackupJobEntity>
 
+    @Query(
+        """
+        SELECT * FROM pending_backup_jobs
+        WHERE profileId = :profileId AND status IN ('FAILED', 'NEEDS_RECONCILIATION')
+        ORDER BY updatedAtEpochMillis DESC, id DESC
+        LIMIT 1
+        """,
+    )
+    suspend fun latestProblemJob(profileId: String): PendingBackupJobEntity?
+
     @Query("SELECT * FROM pending_backup_jobs WHERE status = 'SUCCEEDED' ORDER BY updatedAtEpochMillis, id")
     suspend fun completedJobsAwaitingCleanup(): List<PendingBackupJobEntity>
 
