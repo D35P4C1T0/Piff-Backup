@@ -11,6 +11,9 @@ import android.provider.Settings
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import android.widget.ArrayAdapter
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -50,6 +53,8 @@ import com.d35p4c1t0.piffbackup.scheduling.BackupProgressStatus
 import com.d35p4c1t0.piffbackup.ui.HomeBackupStatus
 import com.d35p4c1t0.piffbackup.ui.HomeScreenState
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.runBlocking
 import java.util.Date
 import java.util.UUID
@@ -65,6 +70,7 @@ class MainActivity : AppCompatActivity() {
     private var pendingLocalFolder: LocalTreeSelection? = null
     private var remoteBrowserParent: RemoteRelativePath? = null
     private var selectedRemotePath: String? = null
+    private var selectedOnboardingRoot: RemoteDirectory? = null
     private var activePreview: InitialAdoptionPreview? = null
     private var previewPurpose = PreviewPurpose.INITIAL_ADOPTION
     private var hasCompletedAdoption = false
@@ -136,6 +142,8 @@ class MainActivity : AppCompatActivity() {
                         app.remoteDirectoryBrowser.cancel()
                         app.onboardingCoordinator.discardPendingConnection()
                         showConnect(activeProfile)
+                    } else if (binding.mappingEditorGroup.isVisible) {
+                        closeMappingEditor()
                     } else if (hasCompletedAdoption && !binding.homeGroup.root.isVisible) {
                         app.initialAdoptionCoordinator.discardPreview()
                         activePreview = null
@@ -156,6 +164,9 @@ class MainActivity : AppCompatActivity() {
             binding.hostnameLayout.visibility = if (checked) View.VISIBLE else View.GONE
         }
         binding.connectButton.setOnClickListener { beginConnection() }
+        binding.confirmDestinationButton.setOnClickListener {
+            selectedOnboardingRoot?.let { completeDestinationSelection(it.relativePath) }
+        }
         binding.retryDestinationListButton.setOnClickListener { loadTopLevelDirectories() }
         binding.changeDestinationConnectionButton.setOnClickListener {
             app.remoteDirectoryBrowser.cancel()
@@ -169,9 +180,18 @@ class MainActivity : AppCompatActivity() {
         binding.grantStorageAccessButton.setOnClickListener { openAllFilesSettings() }
         binding.addLocalFolderButton.setOnClickListener { pickLocalFolder() }
         binding.clearMappingsButton.setOnClickListener {
-            draftMappings.clear()
-            hideMappingEditor()
-            renderDraftMappings()
+            confirmClearMappings()
+        }
+        binding.foldersToolbar.setNavigationOnClickListener { loadExistingProfile(forceConnect = false) }
+        binding.mappingEditorToolbar.setNavigationOnClickListener { closeMappingEditor() }
+        binding.mappingDetailsButton.setOnClickListener {
+            toggleCompactSection(binding.mappingDetailsGroup, binding.mappingDetailsButton)
+        }
+        binding.newRemoteFolderToggle.setOnClickListener {
+            toggleCompactSection(binding.newRemoteFolderGroup, binding.newRemoteFolderToggle)
+        }
+        binding.mappingModeHelpToggle.setOnClickListener {
+            toggleCompactSection(binding.mappingModeHelp, binding.mappingModeHelpToggle)
         }
         binding.remoteUpButton.setOnClickListener { browseUp() }
         binding.useRemoteFolderButton.setOnClickListener {
@@ -197,10 +217,6 @@ class MainActivity : AppCompatActivity() {
             showMappingSetup()
         }
         binding.homeGroup.homeSettingsButton.setOnClickListener { showSettings() }
-        binding.foldersBackButton.setOnClickListener {
-            app.remoteDirectoryBrowser.cancel()
-            loadExistingProfile(forceConnect = false)
-        }
         binding.previewBackHomeButton.setOnClickListener {
             app.initialAdoptionCoordinator.discardPreview()
             activePreview = null
@@ -439,6 +455,9 @@ class MainActivity : AppCompatActivity() {
         )
         binding.destinationError.visibility = View.GONE
         binding.retryDestinationListButton.visibility = View.GONE
+        selectedOnboardingRoot = null
+        binding.confirmDestinationButton.isEnabled = false
+        binding.destinationDirectoryDropdown.setText("", false)
         loadTopLevelDirectories()
     }
 
@@ -449,7 +468,10 @@ class MainActivity : AppCompatActivity() {
         }
         setDestinationBusy(true)
         binding.destinationStatus.setText(R.string.destination_loading)
-        binding.destinationDirectoryList.removeAllViews()
+        selectedOnboardingRoot = null
+        binding.confirmDestinationButton.isEnabled = false
+        binding.destinationDirectoryLayout.isEnabled = false
+        binding.destinationDirectoryDropdown.setText("", false)
         binding.destinationError.visibility = View.GONE
         binding.retryDestinationListButton.visibility = View.GONE
         executor.execute {
@@ -470,17 +492,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderTopLevelDirectories(directories: List<RemoteDirectory>) {
-        binding.destinationDirectoryList.removeAllViews()
         binding.destinationStatus.setText(
             if (directories.isEmpty()) R.string.destination_empty else R.string.destination_choose,
         )
-        directories.forEach { directory ->
-            val button = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle)
-            button.text = getString(R.string.use_storage_box_folder_format, directory.name)
-            button.isAllCaps = false
-            button.minHeight = resources.getDimensionPixelSize(R.dimen.adoption_touch_target)
-            button.setOnClickListener { completeDestinationSelection(directory.relativePath) }
-            binding.destinationDirectoryList.addView(button)
+        binding.destinationDirectoryLayout.isEnabled = directories.isNotEmpty()
+        binding.destinationDirectoryDropdown.setAdapter(
+            ArrayAdapter(this, android.R.layout.simple_list_item_1, directories.map { it.name }),
+        )
+        binding.destinationDirectoryDropdown.setOnItemClickListener { _, _, position, _ ->
+            selectedOnboardingRoot = directories[position]
+            binding.confirmDestinationButton.isEnabled = true
         }
     }
 
@@ -513,9 +534,8 @@ class MainActivity : AppCompatActivity() {
         binding.destinationProgress.visibility = if (busy) View.VISIBLE else View.GONE
         binding.changeDestinationConnectionButton.isEnabled = !busy
         binding.retryDestinationListButton.isEnabled = !busy
-        for (index in 0 until binding.destinationDirectoryList.childCount) {
-            binding.destinationDirectoryList.getChildAt(index).isEnabled = !busy
-        }
+        binding.destinationDirectoryLayout.isEnabled = !busy
+        binding.confirmDestinationButton.isEnabled = !busy && selectedOnboardingRoot != null
     }
 
     private fun showDestinationProgress(progress: OnboardingProgress) {
@@ -549,7 +569,11 @@ class MainActivity : AppCompatActivity() {
         val profile = activeProfile ?: return
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         showOnly(binding.adoptionMappingGroup)
-        binding.foldersBackButton.visibility = if (hasCompletedAdoption) View.VISIBLE else View.GONE
+        if (hasCompletedAdoption) {
+            binding.foldersToolbar.setNavigationIcon(R.drawable.ic_arrow_back)
+        } else {
+            binding.foldersToolbar.navigationIcon = null
+        }
         binding.previewAdoptionButton.setText(
             if (hasCompletedAdoption) R.string.save_and_check_folders else R.string.check_existing_backup,
         )
@@ -559,7 +583,8 @@ class MainActivity : AppCompatActivity() {
         pendingLocalFolder = null
         remoteBrowserParent = RemoteRelativePath.create(profile.remoteBasePath)
         selectedRemotePath = null
-        hideMappingEditor()
+        binding.mappingDetailsGroup.visibility = View.GONE
+        binding.mappingDetailsButton.setIconResource(R.drawable.ic_expand_more)
         updateStorageAccessState()
         renderDraftMappings()
     }
@@ -587,10 +612,10 @@ class MainActivity : AppCompatActivity() {
     private fun updateStorageAccessState() {
         if (!::binding.isInitialized) return
         val granted = Environment.isExternalStorageManager()
+        binding.storageAccessCard.visibility = if (granted) View.GONE else View.VISIBLE
         binding.storageAccessStatus.setText(
             if (granted) R.string.storage_access_granted else R.string.storage_access_missing,
         )
-        binding.grantStorageAccessButton.visibility = if (granted) View.GONE else View.VISIBLE
         binding.addLocalFolderButton.isEnabled = granted
         binding.previewAdoptionButton.isEnabled = granted && draftMappings.isNotEmpty()
     }
@@ -623,10 +648,14 @@ class MainActivity : AppCompatActivity() {
         pendingLocalFolder = selection
         selectedRemotePath = null
         remoteBrowserParent = RemoteRelativePath.create(requireNotNull(activeProfile).remoteBasePath)
-        binding.mappingEditorGroup.visibility = View.VISIBLE
+        showOnly(binding.mappingEditorGroup)
         binding.selectedLocalFolder.text = getString(R.string.selected_local_folder_format, selection.displayName)
         binding.newRemoteFolderInput.setText(selection.displayName)
         binding.mediaFastMode.isChecked = true
+        binding.newRemoteFolderGroup.visibility = View.GONE
+        binding.newRemoteFolderToggle.setIconResource(R.drawable.ic_expand_more)
+        binding.mappingModeHelp.visibility = View.GONE
+        binding.mappingModeHelpToggle.setIconResource(R.drawable.ic_expand_more)
         renderSelectedRemotePath()
         loadRemoteDirectories()
     }
@@ -635,8 +664,13 @@ class MainActivity : AppCompatActivity() {
         val profile = activeProfile ?: return
         val parent = remoteBrowserParent ?: return
         binding.remoteBrowserPath.text = getString(R.string.remote_browser_path_format, parent.value)
+        binding.remoteBrowserStatus.visibility = View.VISIBLE
         binding.remoteBrowserStatus.setText(R.string.remote_browser_loading)
-        binding.remoteDirectoryList.removeAllViews()
+        binding.remoteDirectoryLayout.isEnabled = false
+        binding.remoteDirectoryDropdown.setText("", false)
+        binding.remoteDirectoryDropdown.setAdapter(
+            ArrayAdapter(this, android.R.layout.simple_list_item_1, emptyList<String>()),
+        )
         binding.remoteUpButton.isEnabled = parent.value != profile.remoteBasePath
         executor.execute {
             val directories = runCatching { app.remoteDirectoryBrowser.list(profile, parent) }.getOrNull()
@@ -649,20 +683,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderRemoteDirectories(directories: List<RemoteDirectory>) {
-        binding.remoteDirectoryList.removeAllViews()
-        binding.remoteBrowserStatus.setText(
-            if (directories.isEmpty()) R.string.remote_browser_empty else R.string.remote_browser_choose,
+        binding.remoteBrowserStatus.visibility = if (directories.isEmpty()) View.VISIBLE else View.GONE
+        if (directories.isEmpty()) binding.remoteBrowserStatus.setText(R.string.remote_browser_empty)
+        binding.remoteDirectoryLayout.isEnabled = directories.isNotEmpty()
+        binding.remoteDirectoryDropdown.setAdapter(
+            ArrayAdapter(this, android.R.layout.simple_list_item_1, directories.map { it.name }),
         )
-        directories.forEach { directory ->
-            val button = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle)
-            button.text = getString(R.string.remote_folder_button_format, directory.name)
-            button.isAllCaps = false
-            button.minHeight = resources.getDimensionPixelSize(R.dimen.adoption_touch_target)
-            button.setOnClickListener {
-                remoteBrowserParent = RemoteRelativePath.create(directory.relativePath)
-                loadRemoteDirectories()
-            }
-            binding.remoteDirectoryList.addView(button)
+        binding.remoteDirectoryDropdown.setOnItemClickListener { _, _, position, _ ->
+            val directory = directories[position]
+            remoteBrowserParent = RemoteRelativePath.create(directory.relativePath)
+            loadRemoteDirectories()
         }
         val localName = pendingLocalFolder?.displayName
         val suggestion = directories.firstOrNull { it.name.equals(localName, ignoreCase = true) }
@@ -698,9 +728,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderSelectedRemotePath() {
         val path = selectedRemotePath
-        binding.selectedRemoteFolder.text = if (path == null) "" else {
-            getString(R.string.selected_remote_folder_format, path)
-        }
+        binding.saveMappingButton.isEnabled = path != null
+        binding.selectedRemoteFolder.visibility = if (path == null) View.GONE else View.VISIBLE
+        binding.selectedRemoteFolder.text = path?.let {
+            getString(R.string.selected_remote_folder_format, it)
+        }.orEmpty()
     }
 
     private fun savePendingMapping() {
@@ -726,9 +758,8 @@ class MainActivity : AppCompatActivity() {
         draftMappings += input
         pendingLocalFolder = null
         selectedRemotePath = null
-        hideMappingEditor()
         binding.adoptionError.visibility = View.GONE
-        renderDraftMappings()
+        showMappingSetup()
     }
 
     private fun validateDraftMappings(inputs: List<FolderMappingInput>): Boolean = runCatching {
@@ -749,46 +780,111 @@ class MainActivity : AppCompatActivity() {
         binding.configuredMappings.text = if (draftMappings.isEmpty()) {
             getString(R.string.no_folders_configured)
         } else {
-            draftMappings.joinToString("\n") { mapping ->
-                getString(
-                    R.string.configured_mapping_format,
-                    mapping.displayName,
-                    mapping.relativeRemotePath,
-                    getString(
-                        if (mapping.mode == MappingModeValue.MEDIA_FAST) {
-                            R.string.media_only_fast
-                        } else {
-                            R.string.all_files_slower
-                        },
-                    ),
-                )
-            }
+            getString(R.string.configured_folders_title, draftMappings.size)
         }
         draftMappings.toList().forEach { mapping ->
-            val removeButton = MaterialButton(
-                this,
-                null,
-                com.google.android.material.R.attr.materialButtonOutlinedStyle,
-            ).apply {
-                text = getString(R.string.remove_folder_format, mapping.displayName)
-                isAllCaps = false
-                minHeight = resources.getDimensionPixelSize(R.dimen.adoption_touch_target)
-                setOnClickListener {
-                    draftMappings.removeAll { it.id == mapping.id }
-                    hideMappingEditor()
-                    renderDraftMappings()
-                }
-            }
-            binding.configuredMappingActions.addView(removeButton)
+            binding.configuredMappingActions.addView(mappingCard(mapping))
         }
         binding.clearMappingsButton.visibility = if (draftMappings.isEmpty()) View.GONE else View.VISIBLE
         binding.previewAdoptionButton.isEnabled =
             Environment.isExternalStorageManager() && draftMappings.isNotEmpty()
     }
 
-    private fun hideMappingEditor() {
-        binding.mappingEditorGroup.visibility = View.GONE
-        binding.remoteDirectoryList.removeAllViews()
+    private fun mappingCard(mapping: FolderMappingInput): View {
+        val card = MaterialCardView(this).apply {
+            cardElevation = 0f
+            strokeWidth = 1.dp
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = 6.dp }
+        }
+        val row = LinearLayout(this).apply {
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(16.dp, 10.dp, 8.dp, 10.dp)
+        }
+        val labels = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        labels.addView(TextView(this).apply {
+            text = mapping.displayName
+            setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleMedium)
+        })
+        labels.addView(TextView(this).apply {
+            text = getString(
+                R.string.configured_mapping_detail,
+                mapping.relativeRemotePath,
+                getString(
+                    if (mapping.mode == MappingModeValue.MEDIA_FAST) {
+                        R.string.media_only_fast
+                    } else {
+                        R.string.all_files_slower
+                    },
+                ),
+            )
+            setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
+        })
+        val remove = MaterialButton(
+            this,
+            null,
+            com.google.android.material.R.attr.materialIconButtonStyle,
+        ).apply {
+            setIconResource(R.drawable.ic_delete)
+            text = ""
+            contentDescription = getString(R.string.remove_folder_format, mapping.displayName)
+            layoutParams = LinearLayout.LayoutParams(48.dp, 48.dp)
+            setOnClickListener { confirmRemoveMapping(mapping) }
+        }
+        row.addView(labels)
+        row.addView(remove)
+        card.addView(row)
+        return card
+    }
+
+    private fun confirmRemoveMapping(mapping: FolderMappingInput) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.remove_folder_title, mapping.displayName))
+            .setMessage(R.string.remove_folder_message)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.remove_folder_action) { _, _ ->
+                draftMappings.removeAll { it.id == mapping.id }
+                renderDraftMappings()
+            }
+            .show()
+    }
+
+    private fun confirmClearMappings() {
+        if (draftMappings.isEmpty()) return
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.clear_folders_title)
+            .setMessage(R.string.clear_folders_message)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.remove_folder_action) { _, _ ->
+                draftMappings.clear()
+                binding.mappingDetailsGroup.visibility = View.GONE
+                binding.mappingDetailsButton.setIconResource(R.drawable.ic_expand_more)
+                renderDraftMappings()
+            }
+            .show()
+    }
+
+    private fun toggleCompactSection(target: View, button: MaterialButton) {
+        val expanding = target.visibility != View.VISIBLE
+        target.visibility = if (expanding) View.VISIBLE else View.GONE
+        button.setIconResource(if (expanding) R.drawable.ic_expand_less else R.drawable.ic_expand_more)
+    }
+
+    private val Int.dp: Int
+        get() = (this * resources.displayMetrics.density).toInt()
+
+    private fun closeMappingEditor() {
+        app.remoteDirectoryBrowser.cancel()
+        pendingLocalFolder = null
+        selectedRemotePath = null
+        binding.remoteDirectoryDropdown.dismissDropDown()
+        showMappingSetup()
     }
 
     private fun beginAdoptionPreview() {
@@ -1176,6 +1272,7 @@ class MainActivity : AppCompatActivity() {
             binding.destinationGroup,
             binding.connectedGroup,
             binding.adoptionMappingGroup,
+            binding.mappingEditorGroup,
             binding.adoptionPreviewGroup,
             binding.adoptionTransferGroup,
         ).forEach { it.visibility = if (it === visible) View.VISIBLE else View.GONE }

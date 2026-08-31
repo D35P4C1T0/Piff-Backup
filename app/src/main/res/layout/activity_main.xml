@@ -1,15 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:fillViewport="true">
+    android:layout_height="match_parent">
 
-    <LinearLayout
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="24dp">
+        android:layout_height="match_parent"
+        android:padding="20dp">
 
         <LinearLayout
             android:id="@+id/welcome_group"
@@ -229,12 +227,29 @@
                 android:accessibilityLiveRegion="polite"
                 android:textAppearance="?attr/textAppearanceBodyMedium" />
 
-            <LinearLayout
-                android:id="@+id/destination_directory_list"
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/destination_directory_layout"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:orientation="vertical" />
+                android:hint="@string/backup_folder_dropdown_hint">
+
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/destination_directory_dropdown"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/confirm_destination_button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:enabled="false"
+                android:minHeight="52dp"
+                android:text="@string/continue_action" />
 
             <TextView
                 android:id="@+id/destination_error"
@@ -331,200 +346,111 @@
         <LinearLayout
             android:id="@+id/adoption_mapping_group"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:accessibilityPaneTitle="@string/choose_backup_folders"
             android:orientation="vertical"
             android:visibility="gone">
 
-            <TextView
+            <com.google.android.material.appbar.MaterialToolbar
+                android:id="@+id/folders_toolbar"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:accessibilityHeading="true"
-                android:text="@string/choose_backup_folders"
-                android:textAppearance="?attr/textAppearanceHeadlineMedium" />
+                android:minHeight="56dp"
+                app:navigationIcon="@drawable/ic_arrow_back"
+                app:navigationContentDescription="@string/back"
+                app:title="@string/folders"
+                app:titleTextAppearance="?attr/textAppearanceTitleLarge" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/folders_back_button"
-                style="?attr/materialButtonOutlinedStyle"
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/storage_access_card"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:minHeight="48dp"
-                android:text="@string/back_to_home"
-                android:visibility="gone" />
+                android:layout_marginTop="8dp"
+                app:cardBackgroundColor="?attr/colorSecondaryContainer"
+                app:cardElevation="0dp">
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="@string/all_files_access_explanation"
-                android:textAppearance="?attr/textAppearanceBodyMedium" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="16dp"
+                    android:paddingTop="8dp"
+                    android:paddingEnd="8dp"
+                    android:paddingBottom="8dp">
 
-            <TextView
-                android:id="@+id/storage_access_status"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:accessibilityLiveRegion="polite"
-                android:textAppearance="?attr/textAppearanceLabelLarge" />
+                    <TextView
+                        android:id="@+id/storage_access_status"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:accessibilityLiveRegion="polite"
+                        android:textAppearance="?attr/textAppearanceBodyMedium" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/grant_storage_access_button"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:minHeight="48dp"
-                android:text="@string/grant_folder_access" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/grant_storage_access_button"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        android:text="@string/grant_folder_access_compact" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
             <TextView
                 android:id="@+id/configured_mappings"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:textAppearance="?attr/textAppearanceBodyLarge" />
+                android:layout_marginTop="16dp"
+                android:textAppearance="?attr/textAppearanceTitleMedium" />
 
             <LinearLayout
                 android:id="@+id/configured_mapping_actions"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="6dp"
                 android:orientation="vertical" />
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/clear_mappings_button"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_width="match_parent"
+                android:id="@+id/mapping_details_button"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="4dp"
                 android:minHeight="48dp"
-                android:text="@string/clear_selected_folders"
-                android:visibility="gone" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/add_local_folder_button"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:minHeight="48dp"
-                android:text="@string/add_local_folder" />
+                android:text="@string/folder_setup_details"
+                app:icon="@drawable/ic_expand_more"
+                app:iconGravity="textEnd"
+                app:iconTint="?attr/colorOnSurfaceVariant" />
 
             <LinearLayout
-                android:id="@+id/mapping_editor_group"
+                android:id="@+id/mapping_details_group"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
                 android:orientation="vertical"
                 android:visibility="gone">
 
                 <TextView
-                    android:id="@+id/selected_local_folder"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textAppearance="?attr/textAppearanceTitleMedium" />
-
-                <TextView
-                    android:id="@+id/remote_browser_path"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:textAppearance="?attr/textAppearanceTitleSmall" />
-
-                <TextView
-                    android:id="@+id/remote_browser_status"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:accessibilityLiveRegion="polite"
+                    android:text="@string/all_files_access_explanation"
                     android:textAppearance="?attr/textAppearanceBodySmall" />
 
-                <LinearLayout
-                    android:id="@+id/remote_directory_list"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="vertical" />
-
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/remote_up_button"
-                    style="?attr/materialButtonOutlinedStyle"
-                    android:layout_width="match_parent"
+                    android:id="@+id/clear_mappings_button"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
                     android:minHeight="48dp"
-                    android:text="@string/remote_folder_up" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/use_remote_folder_button"
-                    style="?attr/materialButtonOutlinedStyle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:minHeight="48dp"
-                    android:text="@string/use_this_remote_folder" />
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:hint="@string/new_remote_folder_name">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/new_remote_folder_input"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:inputType="text"
-                        android:maxLength="120"
-                        android:singleLine="true" />
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/use_new_remote_folder_button"
-                    style="?attr/materialButtonOutlinedStyle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:minHeight="48dp"
-                    android:text="@string/use_new_remote_folder" />
-
-                <TextView
-                    android:id="@+id/selected_remote_folder"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:textAppearance="?attr/textAppearanceBodyLarge" />
-
-                <RadioGroup
-                    android:id="@+id/mapping_mode_group"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:orientation="vertical">
-
-                    <com.google.android.material.radiobutton.MaterialRadioButton
-                        android:id="@+id/media_fast_mode"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:checked="true"
-                        android:minHeight="48dp"
-                        android:text="@string/media_only_fast" />
-
-                    <com.google.android.material.radiobutton.MaterialRadioButton
-                        android:id="@+id/all_files_mode"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:minHeight="48dp"
-                        android:text="@string/all_files_slower" />
-                </RadioGroup>
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/save_mapping_button"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:minHeight="48dp"
-                    android:text="@string/add_this_mapping" />
+                    android:text="@string/clear_selected_folders"
+                    android:textColor="?attr/colorError"
+                    android:visibility="gone" />
             </LinearLayout>
+
+            <Space
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
 
             <TextView
                 android:id="@+id/adoption_error"
@@ -545,12 +471,221 @@
                 android:visibility="gone" />
 
             <com.google.android.material.button.MaterialButton
+                android:id="@+id/add_local_folder_button"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:minHeight="48dp"
+                android:text="@string/add_local_folder"
+                app:icon="@drawable/ic_add" />
+
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/preview_adoption_button"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                android:minHeight="48dp"
+                android:layout_marginTop="8dp"
+                android:minHeight="52dp"
                 android:text="@string/check_existing_backup" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/mapping_editor_group"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:accessibilityPaneTitle="@string/add_local_folder"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <com.google.android.material.appbar.MaterialToolbar
+                android:id="@+id/mapping_editor_toolbar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="56dp"
+                app:navigationIcon="@drawable/ic_arrow_back"
+                app:navigationContentDescription="@string/back"
+                app:title="@string/add_local_folder"
+                app:titleTextAppearance="?attr/textAppearanceTitleLarge" />
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
+                app:cardElevation="0dp">
+
+                <TextView
+                    android:id="@+id/selected_local_folder"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:padding="16dp"
+                    android:textAppearance="?attr/textAppearanceTitleMedium" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <TextView
+                android:id="@+id/remote_browser_path"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:textAppearance="?attr/textAppearanceLabelLarge" />
+
+            <TextView
+                android:id="@+id/remote_browser_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:accessibilityLiveRegion="polite"
+                android:textAppearance="?attr/textAppearanceBodySmall" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/remote_directory_layout"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/open_remote_subfolder">
+
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/remote_directory_dropdown"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/remote_up_button"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    android:minHeight="48dp"
+                    android:text="@string/remote_folder_up_compact" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/use_remote_folder_button"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:minHeight="48dp"
+                    android:text="@string/use_current_folder" />
+            </LinearLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/new_remote_folder_toggle"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:text="@string/create_remote_folder_option"
+                app:icon="@drawable/ic_expand_more"
+                app:iconGravity="textEnd" />
+
+            <LinearLayout
+                android:id="@+id/new_remote_folder_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="@string/new_remote_folder_name">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/new_remote_folder_input"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="text"
+                        android:maxLength="120"
+                        android:singleLine="true" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/use_new_remote_folder_button"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:text="@string/use_new_remote_folder_compact" />
+            </LinearLayout>
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/selected_remote_folder"
+                style="@style/Widget.Material3.Chip.Assist"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:visibility="gone" />
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/mapping_mode_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/media_fast_mode"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:checked="true"
+                    android:minHeight="48dp"
+                    android:text="@string/media_only_compact" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/all_files_mode"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:minHeight="48dp"
+                    android:text="@string/all_files_compact" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/mapping_mode_help_toggle"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minHeight="40dp"
+                android:text="@string/which_backup_mode"
+                app:icon="@drawable/ic_expand_more"
+                app:iconGravity="textEnd" />
+
+            <TextView
+                android:id="@+id/mapping_mode_help"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/backup_mode_help"
+                android:textAppearance="?attr/textAppearanceBodySmall"
+                android:visibility="gone" />
+
+            <Space
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/save_mapping_button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="52dp"
+                android:text="@string/add_this_mapping" />
         </LinearLayout>
 
         <LinearLayout
@@ -662,5 +797,5 @@
                 android:text="@string/cancel_backup" />
         </LinearLayout>
 
-    </LinearLayout>
-</androidx.core.widget.NestedScrollView>
+    </FrameLayout>
+</FrameLayout>
