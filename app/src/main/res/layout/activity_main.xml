@@ -15,11 +15,13 @@
             android:id="@+id/welcome_group"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:accessibilityPaneTitle="@string/app_name"
             android:orientation="vertical">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:accessibilityHeading="true"
                 android:text="@string/app_name"
                 android:textAppearance="?attr/textAppearanceHeadlineLarge" />
 
@@ -51,12 +53,14 @@
             android:id="@+id/connect_group"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:accessibilityPaneTitle="@string/connect_storage_box"
             android:orientation="vertical"
             android:visibility="gone">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:accessibilityHeading="true"
                 android:text="@string/connect_storage_box"
                 android:textAppearance="?attr/textAppearanceHeadlineMedium" />
 
@@ -163,6 +167,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:indeterminate="true"
+                android:importantForAccessibility="no"
                 android:visibility="gone" />
 
             <TextView
@@ -198,12 +203,14 @@
             android:id="@+id/connected_group"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:accessibilityPaneTitle="@string/storage_box_connected"
             android:orientation="vertical"
             android:visibility="gone">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:accessibilityHeading="true"
                 android:text="@string/storage_box_connected"
                 android:textAppearance="?attr/textAppearanceHeadlineMedium" />
 
@@ -259,12 +266,14 @@
             android:id="@+id/adoption_mapping_group"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:accessibilityPaneTitle="@string/choose_backup_folders"
             android:orientation="vertical"
             android:visibility="gone">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:accessibilityHeading="true"
                 android:text="@string/choose_backup_folders"
                 android:textAppearance="?attr/textAppearanceHeadlineMedium" />
 
@@ -466,6 +475,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:indeterminate="true"
+                android:importantForAccessibility="no"
                 android:visibility="gone" />
 
             <com.google.android.material.button.MaterialButton
@@ -481,6 +491,7 @@
             android:id="@+id/adoption_preview_group"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:accessibilityPaneTitle="@string/existing_backup_checked"
             android:orientation="vertical"
             android:visibility="gone">
 
@@ -488,6 +499,7 @@
                 android:id="@+id/adoption_preview_title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:accessibilityHeading="true"
                 android:text="@string/existing_backup_checked"
                 android:textAppearance="?attr/textAppearanceHeadlineMedium" />
 
@@ -547,12 +559,14 @@
             android:id="@+id/adoption_transfer_group"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:accessibilityPaneTitle="@string/backing_up"
             android:orientation="vertical"
             android:visibility="gone">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:accessibilityHeading="true"
                 android:text="@string/backing_up"
                 android:textAppearance="?attr/textAppearanceHeadlineMedium" />
 
@@ -561,6 +575,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="24dp"
+                android:importantForAccessibility="no"
                 android:max="100" />
 
             <TextView

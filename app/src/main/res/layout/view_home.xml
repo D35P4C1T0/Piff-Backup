@@ -3,12 +3,14 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:accessibilityPaneTitle="@string/app_name"
     android:orientation="vertical"
     android:visibility="gone">
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:accessibilityHeading="true"
         android:text="@string/app_name"
         android:textAppearance="?attr/textAppearanceHeadlineLarge" />
 
@@ -29,6 +31,7 @@
                 android:id="@+id/home_status_title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:accessibilityHeading="true"
                 android:accessibilityLiveRegion="polite"
                 android:textAppearance="?attr/textAppearanceHeadlineSmall" />
 

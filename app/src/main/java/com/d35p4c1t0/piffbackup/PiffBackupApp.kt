@@ -3,6 +3,9 @@ package com.d35p4c1t0.piffbackup
 import android.app.Application
 import android.os.Environment
 import androidx.work.Configuration
+import com.d35p4c1t0.piffbackup.allfiles.AllFilesMetadataPlanner
+import com.d35p4c1t0.piffbackup.allfiles.AllFilesMetadataSnapshotStore
+import com.d35p4c1t0.piffbackup.allfiles.LocalMetadataLookup
 import com.d35p4c1t0.piffbackup.adoption.InitialAdoptionCoordinator
 import com.d35p4c1t0.piffbackup.adoption.InitialFileListPlanner
 import com.d35p4c1t0.piffbackup.adoption.NativeAdoptionRsyncExecutor
@@ -28,6 +31,10 @@ import com.google.android.material.color.DynamicColors
 import java.io.File
 
 class PiffBackupApp : Application(), Configuration.Provider {
+    private val incrementalFileListRoot: File by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        File(noBackupFilesDir, "incremental-file-lists")
+    }
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setJobSchedulerJobIdRange(WORK_MANAGER_JOB_ID_MIN, WORK_MANAGER_JOB_ID_MAX)
@@ -40,7 +47,7 @@ class PiffBackupApp : Application(), Configuration.Provider {
     val durableBackupStore: DurableBackupStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         DurableBackupStore(
             database = database,
-            fileListRoot = File(noBackupFilesDir, "incremental-file-lists"),
+            fileListRoot = incrementalFileListRoot,
         )
     }
 
@@ -82,7 +89,16 @@ class PiffBackupApp : Application(), Configuration.Provider {
     }
 
     val adoptionFileLists: IncrementalFileListStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        IncrementalFileListStore(File(noBackupFilesDir, "incremental-file-lists"))
+        IncrementalFileListStore(incrementalFileListRoot)
+    }
+
+    val allFilesMetadataPlanner: AllFilesMetadataPlanner by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        AllFilesMetadataPlanner(
+            fileLists = adoptionFileLists,
+            snapshots = AllFilesMetadataSnapshotStore(incrementalFileListRoot),
+            metadata = LocalMetadataLookup(durableBackupStore::localMetadata),
+            volumeRoot = Environment.getExternalStorageDirectory(),
+        )
     }
 
     val incrementalBackupCoordinator: IncrementalBackupCoordinator by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
@@ -91,6 +107,7 @@ class PiffBackupApp : Application(), Configuration.Provider {
             durableBackup = durableBackupStore,
             mediaSource = AndroidMediaStoreSource(applicationContext),
             fileLists = adoptionFileLists,
+            allFiles = allFilesMetadataPlanner,
         )
     }
 
@@ -119,6 +136,7 @@ class PiffBackupApp : Application(), Configuration.Provider {
                 store = adoptionFileLists,
                 volumeRoot = Environment.getExternalStorageDirectory(),
             ),
+            allFiles = allFilesMetadataPlanner,
             credentials = onboardingCredentials,
             knownHosts = knownHostStore,
             rsync = NativeAdoptionRsyncExecutor(applicationContext),

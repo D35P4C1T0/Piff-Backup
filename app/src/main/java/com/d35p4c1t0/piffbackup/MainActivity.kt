@@ -1,5 +1,6 @@
 package com.d35p4c1t0.piffbackup
 
+import android.animation.ValueAnimator
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -9,6 +10,7 @@ import android.os.Environment
 import android.provider.Settings
 import android.view.View
 import android.view.WindowManager
+import android.view.accessibility.AccessibilityEvent
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -69,6 +71,7 @@ class MainActivity : AppCompatActivity() {
     private var oneShotHomeMessage: String? = null
     private var activePendingJobId: String? = null
     private var jobAwaitingNotificationPermission: String? = null
+    private var currentScreen: View? = null
 
     private val backupProgressListener: (BackupProgressEvent) -> Unit = { event ->
         runOnUiThread {
@@ -538,7 +541,7 @@ class MainActivity : AppCompatActivity() {
     private fun renderRemoteDirectories(directories: List<RemoteDirectory>) {
         binding.remoteDirectoryList.removeAllViews()
         binding.remoteBrowserStatus.setText(
-            if (directories.isEmpty()) R.string.remote_browser_empty else R.string.use_this_remote_folder,
+            if (directories.isEmpty()) R.string.remote_browser_empty else R.string.remote_browser_choose,
         )
         directories.forEach { directory ->
             val button = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle)
@@ -836,7 +839,10 @@ class MainActivity : AppCompatActivity() {
             )
             return
         }
-        binding.adoptionTransferProgress.setProgressCompat(progress.percentage, true)
+        binding.adoptionTransferProgress.setProgressCompat(
+            progress.percentage,
+            ValueAnimator.areAnimatorsEnabled(),
+        )
         binding.adoptionTransferStatus.text = getString(
             R.string.adoption_progress_format,
             progress.rootNumber,
@@ -1050,6 +1056,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showOnly(visible: View) {
+        val screenChanged = currentScreen !== visible
         listOf(
             binding.welcomeGroup,
             binding.homeGroup.root,
@@ -1060,6 +1067,13 @@ class MainActivity : AppCompatActivity() {
             binding.adoptionPreviewGroup,
             binding.adoptionTransferGroup,
         ).forEach { it.visibility = if (it === visible) View.VISIBLE else View.GONE }
+        if (screenChanged) {
+            currentScreen = visible
+            binding.root.post {
+                binding.root.scrollTo(0, 0)
+                visible.sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED)
+            }
+        }
     }
 
     private fun mappingInput(entity: FolderMappingEntity) = FolderMappingInput(

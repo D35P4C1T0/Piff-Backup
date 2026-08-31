@@ -3,7 +3,7 @@
 PiffBackup is an Android 13+ one-way media backup app for a private Hetzner
 Storage Box. Development follows `reference/PROJECT.MD` phase by phase.
 
-Current status: Phases 1–8 are complete. The project builds a single
+Current status: Phases 1–9 are complete. The project builds a single
 `arm64-v8a` APK, includes
 reproducibly built rsync and strict SSH tools, turns bounded MediaStore
 generation changes into streamed NUL-delimited file lists, and persists
@@ -17,7 +17,10 @@ setups open on a minimal home screen with live status, one-tap discovery,
 last-success time, dynamic folder management, and settings. Manual transfers
 run as API 34+ user-initiated data-transfer jobs or an API 33 foreground
 WorkManager fallback, with notification progress and durable Pause/Resume.
-Phase 9 release hardening remains.
+Phase 9 adds an atomic metadata index for normal `All files` discovery,
+release-only diagnostic suppression, explicit component exposure, English and
+Italian locale metadata, accessibility semantics, reduced-motion handling,
+and an R8/resource-shrunk release gate.
 
 ## Build
 
@@ -54,7 +57,9 @@ confirmation, interruption, and completion navigation are recorded in
 recorded in `PHASE7_MINIMAL_UI.md`. Phase 8 background execution, durable
 handoff, and device verification are recorded in
 `PHASE8_BACKGROUND_EXECUTION.md`. The first real transfer measurement and its
-limitations are recorded in `PERFORMANCE.md`.
+limitations are recorded in `PERFORMANCE.md`. Phase 9 security, accessibility,
+localization, performance, and release verification are recorded in
+`PHASE9_RELEASE_HARDENING.md`.
 
 ## Safety and privacy
 

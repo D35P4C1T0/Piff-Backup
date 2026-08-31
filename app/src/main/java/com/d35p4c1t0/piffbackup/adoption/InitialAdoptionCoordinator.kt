@@ -1,11 +1,13 @@
 package com.d35p4c1t0.piffbackup.adoption
 
 import android.content.Context
+import com.d35p4c1t0.piffbackup.allfiles.AllFilesMetadataPlanner
 import com.d35p4c1t0.piffbackup.backup.RemoteRelativePath
 import com.d35p4c1t0.piffbackup.data.DurableBackupStore
 import com.d35p4c1t0.piffbackup.data.DurableConfigurationStore
 import com.d35p4c1t0.piffbackup.data.FolderMappingEntity
 import com.d35p4c1t0.piffbackup.data.FolderMappingInput
+import com.d35p4c1t0.piffbackup.data.MappingModeValue
 import com.d35p4c1t0.piffbackup.data.PendingBackupJobDraft
 import com.d35p4c1t0.piffbackup.data.PendingRootDraft
 import com.d35p4c1t0.piffbackup.data.DurablePendingJob
@@ -129,6 +131,7 @@ class InitialAdoptionCoordinator(
     private val durableBackup: DurableBackupStore,
     private val mediaSource: MediaStoreSource,
     private val fileLists: InitialFileListPlanner,
+    private val allFiles: AllFilesMetadataPlanner,
     private val credentials: OnboardingCredentialManager,
     private val knownHosts: KnownHostStore,
     private val rsync: AdoptionRsyncExecutor,
@@ -239,6 +242,7 @@ class InitialAdoptionCoordinator(
             if (!mappingsMatch(preview.roots.map { it.files.entity }, currentMappings)) {
                 throw AdoptionOperationException(InitialAdoptionError.CONFIGURATION_CHANGED)
             }
+            prepareMetadataSnapshots(preview.roots.map { it.files })
             credentials.withPrivateKey(requireNotNull(profile.encryptedCredentialRef)) { key ->
                 val ssh = strictConfig(profile, key)
                 preview.roots.forEachIndexed { index, root ->
@@ -261,6 +265,7 @@ class InitialAdoptionCoordinator(
                     }
                 }
             }
+            applyMetadataSnapshots(preview.roots.map { it.files })
             durableBackup.completeInitialAdoption(
                 runId = preview.id,
                 profileId = preview.profileId,
@@ -301,7 +306,14 @@ class InitialAdoptionCoordinator(
                 ?: throw AdoptionOperationException(InitialAdoptionError.CONFIGURATION_CHANGED)
             require(checkpoint.version == preview.snapshot.version)
             require(preview.snapshot.generation >= checkpoint.successfulGeneration)
+            prepareMetadataSnapshots(preview.roots.map { it.files })
             val retainedRoots = preview.roots.filter { it.summary.itemsToUpload > 0L }
+            preview.roots.filterNot { it in retainedRoots }
+                .map { it.files }
+                .filter { it.entity.mode == MappingModeValue.ALL_FILES }
+                .forEach { root ->
+                    durableBackup.applyLocalMetadataSnapshot(root.entity.id, root.file.path)
+                }
             val pending = durableBackup.persistPendingJob(
                 PendingBackupJobDraft(
                     id = BackupJobKind.reconciliationId(preview.id),
@@ -322,7 +334,7 @@ class InitialAdoptionCoordinator(
                 ),
             )
             preview.roots.filterNot { it in retainedRoots }.forEach { root ->
-                runCatching { root.files.file.delete() }
+                deleteArtifacts(root.files)
             }
             currentPreview = null
             InitialAdoptionResult.Success(pending)
@@ -341,15 +353,29 @@ class InitialAdoptionCoordinator(
         val preview = currentPreview
         currentPreview = null
         preview?.roots?.forEach { root ->
-            val file = root.files.file
-            if (file.isFile) file.delete()
+            deleteArtifacts(root.files)
         }
     }
 
     private fun deleteGeneratedRoots(roots: List<InitialRootFileList>) {
-        roots.forEach { root ->
-            if (root.file.isFile) root.file.delete()
+        roots.forEach(::deleteArtifacts)
+    }
+
+    private suspend fun prepareMetadataSnapshots(roots: List<InitialRootFileList>) {
+        roots.filter { it.entity.mode == MappingModeValue.ALL_FILES }.forEach { root ->
+            allFiles.writeSnapshotForFileList(root.entity, root.file.path)
         }
+    }
+
+    private suspend fun applyMetadataSnapshots(roots: List<InitialRootFileList>) {
+        roots.filter { it.entity.mode == MappingModeValue.ALL_FILES }.forEach { root ->
+            durableBackup.applyLocalMetadataSnapshot(root.entity.id, root.file.path)
+        }
+    }
+
+    private fun deleteArtifacts(root: InitialRootFileList) {
+        durableBackup.deleteLocalMetadataSnapshot(root.file.path)
+        if (root.file.isFile) root.file.delete()
     }
 
     private fun strictConfig(profile: com.d35p4c1t0.piffbackup.data.StorageBoxProfileEntity, key: File) =

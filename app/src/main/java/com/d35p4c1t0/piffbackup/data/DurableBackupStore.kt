@@ -1,6 +1,7 @@
 package com.d35p4c1t0.piffbackup.data
 
 import androidx.room3.withWriteTransaction
+import com.d35p4c1t0.piffbackup.allfiles.AllFilesMetadataSnapshotStore
 import com.d35p4c1t0.piffbackup.media.MediaPlanningResult
 import com.d35p4c1t0.piffbackup.media.MediaStoreCheckpoint
 import java.io.File
@@ -12,6 +13,7 @@ class DurableBackupStore(
 ) {
     private val dao = database.dao()
     private val allowedFileListRoot = fileListRoot.canonicalFile
+    private val metadataSnapshots = AllFilesMetadataSnapshotStore(fileListRoot)
 
     init {
         require(fileListRoot.isAbsolute) { "File-list root must be absolute" }
@@ -48,6 +50,23 @@ class DurableBackupStore(
             successfulGeneration = checkpoint.successfulGeneration,
         )
     }
+
+    suspend fun localMetadata(
+        mappingId: String,
+        relativePaths: List<String>,
+    ): List<LocalFileMetadataEntity> {
+        if (relativePaths.isEmpty()) return emptyList()
+        require(relativePaths.size <= 1_000) { "Metadata lookup batch is too large" }
+        return dao.localMetadata(mappingId, relativePaths)
+    }
+
+    suspend fun applyLocalMetadataSnapshot(mappingId: String, fileListPath: String) {
+        database.withWriteTransaction {
+            replaceLocalMetadataFromSnapshot(mappingId, fileListPath, checkedNow())
+        }
+    }
+
+    fun deleteLocalMetadataSnapshot(fileListPath: String): Boolean = metadataSnapshots.delete(fileListPath)
 
     suspend fun completeInitialAdoption(
         runId: String,
@@ -166,6 +185,11 @@ class DurableBackupStore(
                 require(mapping.profileId == draft.profileId && mapping.enabled) {
                     "A planned mapping is not enabled for this profile"
                 }
+                if (mapping.mode == MappingModeValue.ALL_FILES) {
+                    require(metadataSnapshots.isValid(canonicalList.path)) {
+                        "All-files work requires a metadata snapshot"
+                    }
+                }
                 totalFiles = totalFiles.checkedAdd(rootDraft.totalFiles, "Job file count overflow")
                 totalBytes = totalBytes.checkedAdd(rootDraft.totalBytes, "Job byte count overflow")
                 PendingRootWorkEntity(
@@ -215,6 +239,10 @@ class DurableBackupStore(
             val root = requireNotNull(dao.rootWork(jobId, mappingId)) { "Pending root does not exist" }
             require(root.status in RUNNABLE_ROOT_STATUSES) { "Pending root is not runnable" }
             requireValidFileList(root.fileListPath)
+            val mapping = dao.mappingsById(listOf(mappingId)).singleOrNull()
+            if (mapping?.mode == MappingModeValue.ALL_FILES) {
+                require(metadataSnapshots.isValid(root.fileListPath)) { "Metadata snapshot is missing" }
+            }
             val now = checkedNow()
             check(
                 dao.updateRootWork(
@@ -258,6 +286,12 @@ class DurableBackupStore(
             require(sanitizedErrorCode == null) { "Successful root must not have an error code" }
         }
         val now = checkedNow()
+        if (outcome == RootExecutionOutcome.SUCCESS) {
+            val mapping = dao.mappingsById(listOf(mappingId)).singleOrNull()
+            if (mapping?.mode == MappingModeValue.ALL_FILES) {
+                replaceLocalMetadataFromSnapshot(mappingId, root.fileListPath, now)
+            }
+        }
         val updatedRoot = when (outcome) {
             RootExecutionOutcome.SUCCESS -> root.copy(
                 status = PendingRootStatusValue.SUCCEEDED,
@@ -358,7 +392,7 @@ class DurableBackupStore(
         var cleaned = 0
         dao.completedJobsAwaitingCleanup().forEach { job ->
             val roots = dao.rootWork(job.id)
-            val allClean = roots.fold(true) { clean, root -> deleteExactFileList(root.fileListPath) && clean }
+            val allClean = roots.fold(true) { clean, root -> deleteExactArtifacts(root.fileListPath) && clean }
             if (allClean) {
                 database.withWriteTransaction {
                     val current = dao.job(job.id)
@@ -372,16 +406,21 @@ class DurableBackupStore(
     }
 
     suspend fun cleanupOrphanedFileLists(): Int {
-        val referenced = dao.jobs().flatMap { job -> dao.rootWork(job.id) }
+        val referencedLists = dao.jobs().flatMap { job -> dao.rootWork(job.id) }
             .mapNotNull { root -> runCatching { File(root.fileListPath).canonicalPath }.getOrNull() }
             .toSet()
+        val referenced = referencedLists + referencedLists.mapNotNull {
+            runCatching { metadataSnapshots.path(it) }.getOrNull()
+        }
         var deleted = 0
         allowedFileListRoot.listFiles().orEmpty().forEach { candidate ->
             val canonical = runCatching { candidate.canonicalFile }.getOrNull() ?: return@forEach
             if (
                 canonical.parentFile == allowedFileListRoot &&
                 canonical.name.startsWith("piffbackup-") &&
-                canonical.name.endsWith(".from0") &&
+                (canonical.name.endsWith(".from0") ||
+                    canonical.name.endsWith(AllFilesMetadataSnapshotStore.METADATA_SUFFIX) ||
+                    canonical.name.startsWith("piffbackup-metadata-") && canonical.name.endsWith(".tmp")) &&
                 canonical.path !in referenced &&
                 canonical.isFile &&
                 canonical.delete()
@@ -531,6 +570,13 @@ class DurableBackupStore(
         ) {
             return DurableErrorCode.CONFIGURATION_CHANGED
         }
+        if (roots.filter { it.status != PendingRootStatusValue.SUCCEEDED }.any { root ->
+                persistedMappings[root.folderMappingId]?.mode == MappingModeValue.ALL_FILES &&
+                    !metadataSnapshots.isValid(root.fileListPath)
+            }
+        ) {
+            return DurableErrorCode.METADATA_SNAPSHOT_MISSING
+        }
         val totals = runCatching {
             roots.fold(0L to 0L) { total, root ->
                 total.first.checkedAdd(root.totalFiles, "overflow") to
@@ -587,6 +633,31 @@ class DurableBackupStore(
     private fun isValidFileList(rawPath: String): Boolean =
         runCatching { requireValidFileList(rawPath) }.isSuccess
 
+    private suspend fun replaceLocalMetadataFromSnapshot(
+        mappingId: String,
+        fileListPath: String,
+        observedAt: Long,
+    ) {
+        val mapping = dao.mappingsById(listOf(mappingId)).singleOrNull()
+        require(mapping?.mode == MappingModeValue.ALL_FILES && mapping.enabled) {
+            "Metadata snapshot mapping is unavailable"
+        }
+        dao.deleteLocalMetadata(mappingId)
+        metadataSnapshots.forEachBatch(fileListPath) { records ->
+            dao.upsertLocalMetadata(
+                records.map { record ->
+                    LocalFileMetadataEntity(
+                        folderMappingId = mappingId,
+                        relativePath = record.relativePath,
+                        sizeBytes = record.sizeBytes,
+                        modifiedAtEpochMillis = record.modifiedAtEpochMillis,
+                        observedAtEpochMillis = observedAt,
+                    )
+                },
+            )
+        }
+    }
+
     private fun deleteExactFileList(rawPath: String): Boolean {
         val file = runCatching {
             val candidate = File(rawPath)
@@ -596,6 +667,12 @@ class DurableBackupStore(
             }
         }.getOrNull() ?: return false
         return !file.exists() || file.delete()
+    }
+
+    private fun deleteExactArtifacts(rawPath: String): Boolean {
+        val metadataDeleted = metadataSnapshots.delete(rawPath)
+        val listDeleted = deleteExactFileList(rawPath)
+        return metadataDeleted && listDeleted
     }
 
     private fun validateSanitizedError(value: String?) {

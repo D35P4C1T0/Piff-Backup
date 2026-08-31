@@ -20,7 +20,7 @@
     <string name="last_backup_never">Nessun backup riuscito</string>
     <string name="date_time_format">%1$s alle %2$s</string>
     <plurals name="folders_count">
-        <item quantity="one">Cartelle · %d</item>
+        <item quantity="one">Cartella · %d</item>
         <item quantity="many">Cartelle · %d</item>
         <item quantity="other">Cartelle · %d</item>
     </plurals>
@@ -75,6 +75,7 @@
     <string name="remote_browser_path_format">Cartella Storage Box: %1$s/</string>
     <string name="remote_browser_loading">Caricamento cartelle…</string>
     <string name="remote_browser_empty">Nessuna sottocartella</string>
+    <string name="remote_browser_choose">Scegli una cartella qui sotto oppure usa la cartella corrente.</string>
     <string name="remote_browser_failed">Impossibile caricare le cartelle dello Storage Box. Controlla la connessione e riprova.</string>
     <string name="remote_folder_button_format">Apri %1$s</string>
     <string name="remote_folder_up">Sali di una cartella</string>

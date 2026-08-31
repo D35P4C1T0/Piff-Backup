@@ -49,6 +49,32 @@ APK of 4,080,343 bytes and an unminified debug APK of 25,691,940 bytes. The
 increase contains the complete Home, folder-management, Settings, English, and
 Italian UI slice.
 
+The Phase 9 build on 2026-08-31 produced an unsigned, R8-minified and
+resource-shrunk ARM64 release APK of 4,415,663 bytes and an unminified debug APK
+of 27,299,112 bytes. The increase includes Phase 8 durable execution plus the
+Phase 9 metadata snapshot planner and its recovery path.
+
+## Phase 9 local-only device measurements
+
+Measured on a Xiaomi Mi 9T Pro running Android API 33. These checks used only
+app-private/test-specific local files; they did not connect to a Storage Box.
+
+| Measurement | Observed value |
+| --- | ---: |
+| Debug cold activity start (`am start -W`, TotalTime) | 918 ms |
+| Debug idle process total PSS | 104,230 KiB |
+| Scan and stage 1,000 new local files | 105 ms |
+| Scan and compare 1,000 unchanged local files | 119 ms |
+| Metadata sidecar for 1,000 files | 41,644 bytes |
+| Local rsync of 100 × 1 KiB files | 58 ms |
+| Local no-op rsync repeat | 56 ms |
+
+Startup and memory are debug-build observations and include framework/UI costs;
+they are not release-build targets. Discovery and rsync figures are single-run
+bounded diagnostics, not throughput guarantees. The persistent performance
+instrumentation test records the same local-only fields without logging file
+names.
+
 ## Next experiments
 
 1. Capture internal planning, rsync startup, transfer, cancellation, and resume

@@ -2,6 +2,7 @@ package com.d35p4c1t0.piffbackup.onboarding
 
 import android.content.Context
 import android.util.Log
+import com.d35p4c1t0.piffbackup.BuildConfig
 import com.d35p4c1t0.piffbackup.backup.RemoteRelativePath
 import com.d35p4c1t0.piffbackup.rsync.NativeProcessRunner
 import com.d35p4c1t0.piffbackup.rsync.NativeProcessResult
@@ -88,6 +89,7 @@ class NativeStorageBoxDestinationVerifier(
         result: NativeProcessResult,
         config: StrictSshConfig,
     ) {
+        if (!BuildConfig.DEBUG) return
         val diagnostic = safeNativeSshDiagnostic(result.stderr, config)
         Log.w(
             LOG_TAG,

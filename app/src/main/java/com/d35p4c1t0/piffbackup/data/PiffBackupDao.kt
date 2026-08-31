@@ -126,6 +126,17 @@ interface PiffBackupDao {
     @Upsert
     suspend fun upsertLocalMetadata(metadata: List<LocalFileMetadataEntity>)
 
+    @Query(
+        """
+        SELECT * FROM all_files_metadata
+        WHERE folderMappingId = :mappingId AND relativePath IN (:relativePaths)
+        """,
+    )
+    suspend fun localMetadata(
+        mappingId: String,
+        relativePaths: List<String>,
+    ): List<LocalFileMetadataEntity>
+
     @Query("DELETE FROM all_files_metadata WHERE folderMappingId = :mappingId")
     suspend fun deleteLocalMetadata(mappingId: String): Int
 }

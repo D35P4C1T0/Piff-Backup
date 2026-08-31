@@ -4,6 +4,9 @@ import android.content.Context
 import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.d35p4c1t0.piffbackup.allfiles.AllFilesMetadataPlanner
+import com.d35p4c1t0.piffbackup.allfiles.AllFilesMetadataSnapshotStore
+import com.d35p4c1t0.piffbackup.allfiles.LocalMetadataLookup
 import com.d35p4c1t0.piffbackup.adoption.AdoptionRsyncExecutor
 import com.d35p4c1t0.piffbackup.adoption.InitialAdoptionCoordinator
 import com.d35p4c1t0.piffbackup.adoption.InitialAdoptionError
@@ -228,6 +231,12 @@ class InitialAdoptionInstrumentedTest {
             fileLists = InitialFileListPlanner(
                 source = FakeMediaSource(),
                 store = IncrementalFileListStore(fileLists),
+                volumeRoot = volume,
+            ),
+            allFiles = AllFilesMetadataPlanner(
+                fileLists = IncrementalFileListStore(fileLists),
+                snapshots = AllFilesMetadataSnapshotStore(fileLists),
+                metadata = LocalMetadataLookup(store::localMetadata),
                 volumeRoot = volume,
             ),
             credentials = FakeCredentials(File(root, "key").apply { writeText("fake") }),

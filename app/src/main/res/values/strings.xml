@@ -20,7 +20,7 @@
     <string name="last_backup_never">No successful backup yet</string>
     <string name="date_time_format">%1$s at %2$s</string>
     <plurals name="folders_count">
-        <item quantity="one">Folders · %d</item>
+        <item quantity="one">Folder · %d</item>
         <item quantity="other">Folders · %d</item>
     </plurals>
     <string name="folders">Folders</string>
@@ -74,6 +74,7 @@
     <string name="remote_browser_path_format">Storage Box folder: %1$s/</string>
     <string name="remote_browser_loading">Loading folders…</string>
     <string name="remote_browser_empty">No subfolders here</string>
+    <string name="remote_browser_choose">Choose a folder below, or use the current folder.</string>
     <string name="remote_browser_failed">Couldn’t load these Storage Box folders. Check the connection and retry.</string>
     <string name="remote_folder_button_format">Open %1$s</string>
     <string name="remote_folder_up">Go up one folder</string>

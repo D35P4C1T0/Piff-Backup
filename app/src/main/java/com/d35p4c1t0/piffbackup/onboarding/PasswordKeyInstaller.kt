@@ -1,6 +1,7 @@
 package com.d35p4c1t0.piffbackup.onboarding
 
 import android.util.Log
+import com.d35p4c1t0.piffbackup.BuildConfig
 import com.hierynomus.sshj.key.KeyAlgorithms
 import com.hierynomus.sshj.transport.kex.DHGroups
 import com.hierynomus.sshj.transport.kex.ExtInfoClientFactory
@@ -109,6 +110,7 @@ class SshjPasswordKeyInstaller : PasswordKeyInstaller {
     }
 
     private fun logSafeFailure(stage: BootstrapStage, failure: Throwable) {
+        if (!BuildConfig.DEBUG) return
         val types = generateSequence(failure) { it.cause }
             .take(MAX_REPORTED_CAUSES)
             .joinToString(" -> ") { it.javaClass.name }
