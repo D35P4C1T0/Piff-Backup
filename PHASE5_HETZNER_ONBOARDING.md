@@ -6,8 +6,9 @@ running API 33 on 2026-08-24.
 ## Password-once authentication
 
 The welcome and connection screens implement the deliberately small flow from
-the project specification. The username and existing top-level backup folder
-start empty and must be entered by the user. The normal hostname is derived as
+the project specification. The login asks only for the username and password.
+After authentication, a read-only selector shows compatible existing top-level
+folders so the user does not need to know the exact name in advance. The normal hostname is derived as
 `<username>.your-storagebox.de`, an advanced hostname override is available,
 and SSH always uses Hetzner's port 23. Connection failures explain the SSH
 Support and External Reachability settings and offer a link to the Hetzner
@@ -42,16 +43,18 @@ host-key pin, never the raw key or password.
 
 ## Harmless destination verification
 
-After key installation the coordinator saves setup as incomplete and performs
-two separate native Dropbear connections:
+After key installation the coordinator keeps a temporary in-memory onboarding
+session and performs two separate native operations:
 
 1. `pwd` proves the generated key can authenticate.
-2. `ls -d <backup-root>/` proves the selected SSH-home-relative directory
+2. A read-only rsync listing shows top-level directories; after selection,
+   `ls -d <backup-root>/` proves the selected SSH-home-relative directory
    exists.
 
 The backup root is restricted to one safe top-level name before it is included
 in the second command. Both commands are bounded to 30 seconds and read-only.
-Setup becomes complete only after both return exit code 0. The app does not
+No incomplete profile replaces durable configuration. Setup is saved as complete
+only after the selected folder verification returns exit code 0. The app does not
 create a marker, upload a file, list media contents, run rsync, or modify the
 selected root during this phase.
 
@@ -71,7 +74,7 @@ The final Phase 5 gate covers:
 
 - endpoint and hostname validation, host-key encoding/fingerprints, pin reuse,
   pin-change rejection, and corrupt-pin fail-closed behavior;
-- incomplete-before-verify and complete-after-verify persistence;
+- temporary connection-before-selection and complete-only-after-verify persistence;
 - fixed read-only verification commands and bounded native-process timeout;
 - Android Keystore encryption/decryption, owner-only temporary key permissions,
   exact process-death cleanup, native Ed25519 key reuse, and isolated
@@ -85,11 +88,15 @@ remaining security warning points into an unused TLS trust-manager class in the
 transitive Bouncy Castle archive, not PiffBackup's SSH host-key verifier, and R8
 removes that class from the release application.
 
-A user-driven live setup succeeded on the Samsung SM-P610 with `Matteo/` entered
+A user-driven live setup succeeded on the Samsung SM-P610 with `Matteo/` selected
 as the dedicated development root. Native key authentication, `pwd`, and the
 read-only `ls -d Matteo/` check all succeeded. No password, username, host key,
 or personal filename was committed, and connection verification performed no
 remote write or deletion.
+
+On 2026-08-31 onboarding was refined so credentials are established first and
+the backup root is then selected from the Storage Box top level. Existing
+configured profiles keep their previous behavior and destination.
 
 ## Deferred to later phases
 

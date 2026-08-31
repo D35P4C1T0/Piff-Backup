@@ -28,7 +28,7 @@
     <string name="settings">Impostazioni</string>
     <string name="back_to_home">Torna alla schermata principale</string>
     <string name="connect_storage_box">Collega Storage Box</string>
-    <string name="connect_explanation">Inserisci una sola volta la password dello Storage Box. PiffBackup installerà una chiave dedicata e cancellerà la password senza salvarla.</string>
+    <string name="connect_explanation">Inserisci una sola volta la password dello Storage Box. PiffBackup installerà una chiave dedicata, cancellerà la password senza salvarla e poi ti farà scegliere la cartella di backup.</string>
     <string name="storage_box_username">Nome utente</string>
     <string name="storage_box_password">Password</string>
     <string name="remote_base_path">Cartella di backup</string>
@@ -37,6 +37,15 @@
     <string name="server_address">Indirizzo server</string>
     <string name="ssh_port_explanation">Connessione sicura di backup sulla porta 23</string>
     <string name="connect_and_continue">Connetti</string>
+    <string name="choose_storage_box_folder">Scegli la cartella dello Storage Box</string>
+    <string name="choose_storage_box_folder_help">Scegli una cartella principale esistente per questo backup. PiffBackup legge soltanto l’elenco delle cartelle e non crea, modifica o elimina nulla.</string>
+    <string name="destination_connected_format">Connessione sicura a %1$s</string>
+    <string name="destination_loading">Caricamento delle cartelle principali…</string>
+    <string name="destination_choose">Scegli la cartella che conterrà questo backup.</string>
+    <string name="destination_empty">Non sono state trovate cartelle principali compatibili. I nomi possono contenere lettere, numeri, punto, trattino basso o trattino.</string>
+    <string name="destination_list_failed">Impossibile caricare le cartelle dello Storage Box. Controlla la connessione e riprova.</string>
+    <string name="use_storage_box_folder_format">Usa %1$s/</string>
+    <string name="retry_folder_list">Riprova</string>
     <string name="open_hetzner_console">Apri Hetzner Console</string>
     <string name="storage_box_connected">Storage Box collegato</string>
     <string name="connected_summary">Chiave dedicata verificata per %1$s. La cartella di backup esistente %2$s è stata trovata senza modificarla.</string>
@@ -52,9 +61,10 @@
     <string name="progress_preparing_key">Protezione della chiave di backup dedicata…</string>
     <string name="progress_connecting_password">Connessione sicura…</string>
     <string name="progress_installing_key">Installazione della chiave dedicata…</string>
-    <string name="progress_verifying">Verifica della chiave e della cartella di backup esistente…</string>
+    <string name="progress_verifying_key">Verifica della connessione protetta…</string>
+    <string name="progress_verifying_destination">Verifica della cartella scelta senza modificarla…</string>
     <string name="progress_saving">Salvataggio della connessione protetta…</string>
-    <string name="error_invalid_input">Controlla nome utente, indirizzo server, cartella di backup e password.</string>
+    <string name="error_invalid_input">Controlla nome utente, indirizzo server e password.</string>
     <string name="error_network">Impossibile raggiungere lo Storage Box. In Hetzner Console abilita Supporto SSH e Raggiungibilità esterna, attendi qualche minuto e riprova.</string>
     <string name="error_authentication">Lo Storage Box ha rifiutato il nome utente o la password. Controllali e riprova.</string>
     <string name="error_host_changed">L’identità del server è cambiata. PiffBackup si è fermato per proteggere il backup. Verifica l’impronta in Hetzner Console prima di modificare la connessione.</string>

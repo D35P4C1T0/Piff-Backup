@@ -51,4 +51,39 @@ class RemoteDirectoryBrowserTest {
         assertFalse(arguments.any { it == "--delete" || it.startsWith("--delete-") })
         assertEquals("u123456@u123456.your-storagebox.de:Matteo/Family's photos/", arguments.last())
     }
+
+    @Test
+    fun `top level parser returns only valid backup roots`() {
+        val output = listOf(
+            "drwxr-xr-x          4,096 2026/08/24 22:14:49 Matteo/",
+            "drwxr-xr-x          4,096 2026/08/24 22:14:49 Family photos/",
+            "drwxr-xr-x          4,096 2026/08/24 22:14:49 backup_2026/",
+        ).joinToString("\n")
+
+        assertEquals(
+            listOf(
+                RemoteDirectory("backup_2026", "backup_2026"),
+                RemoteDirectory("Matteo", "Matteo"),
+            ),
+            RemoteDirectoryListParser.parseTopLevel(output),
+        )
+    }
+
+    @Test
+    fun `top level listing addresses the account root read only`() {
+        val arguments = RemoteDirectoryListCommand.buildTopLevel(
+            rsyncExecutable = File("/native/rsync"),
+            sshExecutable = File("/native/dbclient"),
+            ssh = StrictSshConfig(
+                username = "u123456",
+                hostname = "u123456.your-storagebox.de",
+                port = 23,
+                identityFile = File("/private/key"),
+                sshHomeDirectory = File("/private/home"),
+            ),
+        )
+
+        assertEquals("u123456@u123456.your-storagebox.de:./", arguments.last())
+        assertFalse(arguments.any { it == "--delete" || it.startsWith("--delete-") })
+    }
 }

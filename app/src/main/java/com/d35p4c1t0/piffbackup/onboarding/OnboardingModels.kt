@@ -35,12 +35,10 @@ data class StorageBoxEndpoint(
 data class OnboardingRequest(
     val profileId: String = DEFAULT_PROFILE_ID,
     val endpoint: StorageBoxEndpoint,
-    val remoteBasePath: RemoteRelativePath,
     val password: CharArray,
 ) {
     init {
         require(PROFILE_ID.matches(profileId)) { "Invalid profile ID" }
-        requireValidStorageBoxBackupRoot(remoteBasePath)
         require(password.isNotEmpty() && password.size <= MAX_PASSWORD_CHARS) { "Invalid password" }
     }
 
@@ -52,18 +50,30 @@ data class OnboardingRequest(
 }
 
 internal fun requireValidStorageBoxBackupRoot(remoteBasePath: RemoteRelativePath) {
-    require(STORAGE_BOX_BACKUP_ROOT.matches(remoteBasePath.value)) {
+    require(isValidStorageBoxBackupRoot(remoteBasePath)) {
         "Backup folder must be a safe top-level Storage Box folder"
     }
 }
 
+internal fun isValidStorageBoxBackupRoot(remoteBasePath: RemoteRelativePath): Boolean =
+    STORAGE_BOX_BACKUP_ROOT.matches(remoteBasePath.value)
+
 private val STORAGE_BOX_BACKUP_ROOT = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,254}")
+
+class OnboardingConnection internal constructor(
+    val profileId: String,
+    val endpoint: StorageBoxEndpoint,
+    val hostFingerprint: String,
+    internal val credentialReference: String,
+    internal val pinnedHostKey: String,
+)
 
 enum class OnboardingProgress {
     PREPARING_KEY,
     CONNECTING_WITH_PASSWORD,
     INSTALLING_KEY,
-    VERIFYING_KEY_AND_DESTINATION,
+    VERIFYING_KEY,
+    VERIFYING_DESTINATION,
     SAVING,
 }
 
@@ -79,6 +89,8 @@ enum class OnboardingErrorCode {
 }
 
 sealed interface OnboardingResult {
+    data class Connected(val connection: OnboardingConnection) : OnboardingResult
+
     data class Success(
         val endpoint: StorageBoxEndpoint,
         val hostFingerprint: String,

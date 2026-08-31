@@ -30,11 +30,11 @@ The scale estimates discussed during planning were roughly 100,000 existing remo
 - Storage Box username: provided by the user during onboarding
 - Storage Box hostname: `<storage-box-username>.your-storagebox.de`
 - Hetzner SSH/rsync port: `23`
-- Backup root: entered by the user during first-run onboarding; there is no product default
+- Backup root: selected by the user from a read-only top-level folder list after authentication; there is no product default
 - Non-destructive development verification root: `Matteo/`
 - Corresponding SMB-visible test destination: `smb://<storage-box-username>.your-storagebox.de/backup/Matteo/`
 
-Important: the SMB share component `backup` represents the main account's share and should not automatically become part of the rsync destination. Before adoption, verify harmlessly that the user-entered SSH-relative backup root exposes the same directory as its SMB `/backup/<backup-root>/` path. For development tests, use the separately designated `Matteo/` root. Do not assume a root name and do not write during connection verification.
+Important: the SMB share component `backup` represents the main account's share and should not automatically become part of the rsync destination. Before adoption, verify harmlessly that the user-selected SSH-relative backup root exposes the same directory as its SMB `/backup/<backup-root>/` path. For development tests, use the separately designated `Matteo/` root. Do not assume a root name and do not write during connection verification.
 
 Never commit a password, private key, live host key, generated credential, or personally identifying file list to Git.
 
@@ -56,7 +56,7 @@ Examples only:
 /storage/emulated/0/Movies/            -> <backup-root>/Videos/
 ```
 
-Do not assume these exact local or remote names. First-run onboarding must require the user to enter an existing top-level backup root. The mapping flow must then let the user adopt existing remote directories or create new directories beneath that configured root.
+Do not assume these exact local or remote names. First-run onboarding must require the user to select an existing top-level backup root after authenticating. The mapping flow must then let the user adopt existing remote directories or create new directories beneath that configured root.
 
 Backup semantics are deliberately one-way and non-destructive:
 
@@ -279,7 +279,6 @@ Fields:
 
 - Username, initially empty and editable.
 - Password, never prefilled or persisted in plaintext.
-- Existing top-level backup folder, initially empty and editable. Accept a trailing slash but persist the normalized name without it. Limit the name to letters, numbers, dot, underscore, and hyphen so it can be passed safely to Hetzner's restricted shell.
 
 Derive the default hostname as `<username>.your-storagebox.de`, while allowing an advanced override.
 
@@ -312,13 +311,16 @@ Use trust-on-first-use for the non-technical default:
 - Provide an optional advanced fingerprint comparison against Hetzner Console.
 - Never silently replace a pin.
 
-### Step 4: Verify the existing destination
+### Step 4: Select and verify the existing destination
 
-Use Hetzner's supported, harmless `ls -d <backup-root>/` command to prove that the user-entered SSH-relative backup root exists. In this development environment, use `Matteo/` for real-device checks.
+After key authentication succeeds, show existing top-level folders using a bounded, read-only rsync directory listing. Let the user choose one; do not require them to know its exact name during login. Show only names that use letters, numbers, dot, underscore, and hyphen so the selected root can be passed safely to Hetzner's restricted shell. Persist nothing as a completed profile until a folder is selected.
+
+Use Hetzner's supported, harmless `ls -d <backup-root>/` command to prove that the user-selected SSH-relative backup root exists. In this development environment, use `Matteo/` for explicitly scoped real-device checks.
 
 - Do not create or delete user media for this check.
 - If a temporary marker is necessary, put it in a dedicated `.piffbackup-test` location, verify it through the selected protocol, and remove it immediately.
 - Never prefill or hard-code a backup root.
+- Do not create a folder during first-run destination selection.
 
 ### Step 5: Select and map folders
 
@@ -639,17 +641,18 @@ Implement in this order:
 2. **Core command engine**: validated mappings, dry run, progress, cancellation, exit codes.
 3. **MediaStore incremental planner**: version/generation checkpoints and `--files-from` generation.
 4. **Room durability**: profiles, mappings, pending jobs, recovery.
-5. **Hetzner onboarding**: password-once key installation, host pinning, and read-only verification of the user-entered backup root.
+5. **Hetzner onboarding**: password-once key installation, host pinning, read-only top-level folder selection, and verification of the user-selected backup root.
 6. **Initial adoption flow**: remote mapping, dry-run summary, confirmed upload.
 7. **Minimal home/folder/settings UI**.
 8. **UIDT and WorkManager execution**.
 9. **Security, accessibility, localization, performance, and release hardening**.
 
-Current implementation status (2026-08-25): Phases 1–8 are implemented and
+Current implementation status (2026-08-31): Phases 1–9 are implemented and
 buildable. Completed setups open on the minimal home screen with status,
 one-tap discovery, last-success time, folder management, and settings. Manual
 transfers use API 34+ UIDT or the API 33 foreground WorkManager fallback, with
-notification progress and durable Pause/Resume. Phase 9 remains pending. A
+notification progress and durable Pause/Resume. Onboarding separates account
+authentication from read-only top-level backup-root selection. A
 user-driven live setup and initial upload succeeded on an
 ARM64 Samsung SM-P610 using the explicit `Matteo/` development root;
 `PERFORMANCE.md` records the observed baseline and its limitations. No
@@ -665,7 +668,7 @@ The project is done when all of the following are true:
 - The native rsync and SSH tools are reproducibly buildable for `arm64-v8a`.
 - A signed or debug APK installs on a Galaxy S23+.
 - Onboarding connects to `<storage-box-username>.your-storagebox.de:23` without terminal use.
-- The app requires, verifies, persists, and uses the existing user-entered backup root safely, without a hard-coded default.
+- The app requires, verifies, persists, and uses an existing user-selected backup root safely, without a hard-coded default.
 - The user can configure any number of non-overlapping local roots and map them to remote folders.
 - Initial adoption previews and skips same-path/same-size existing media without deleting anything.
 - After a successful backup, the completion view lets the user check saved mappings for new files, change folders, or change the connection; it is never a terminal screen.

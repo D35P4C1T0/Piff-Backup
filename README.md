@@ -9,8 +9,8 @@ reproducibly built rsync and strict SSH tools, turns bounded MediaStore
 generation changes into streamed NUL-delimited file lists, and persists
 immutable pending work and checkpoints across process death. The app performs
 password-once SSH key installation, Android Keystore-backed credential
-protection, strict host-key pinning, and read-only verification of the backup
-root explicitly entered by the user. Users can choose non-overlapping local
+protection, strict host-key pinning, and read-only selection and verification of
+an existing top-level backup root after login. Users can choose non-overlapping local
 folders, map them beneath that root, preview the existing collection with
 actual rsync, and explicitly confirm the initial one-way upload. Completed
 setups open on a minimal home screen with live status, one-tap discovery,
@@ -64,7 +64,7 @@ localization, performance, and release verification are recorded in
 ## Safety and privacy
 
 Automated host and device tests are intentionally local-only. Phase 5's live
-onboarding check uses only bounded read-only commands against the root entered
+onboarding check uses only bounded read-only commands against the root selected
 by the user. Phase 6 adoption starts with an rsync dry run and cannot upload
 until the user reviews the calculated summary and presses `Start backup`; no
 code path enables remote deletion. Never run destructive tests or generated

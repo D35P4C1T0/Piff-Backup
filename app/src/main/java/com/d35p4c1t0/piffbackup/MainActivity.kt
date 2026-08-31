@@ -37,6 +37,7 @@ import com.d35p4c1t0.piffbackup.data.PendingJobStatusValue
 import com.d35p4c1t0.piffbackup.data.StorageBoxProfileEntity
 import com.d35p4c1t0.piffbackup.databinding.ActivityMainBinding
 import com.d35p4c1t0.piffbackup.onboarding.HostKeyPin
+import com.d35p4c1t0.piffbackup.onboarding.OnboardingConnection
 import com.d35p4c1t0.piffbackup.onboarding.OnboardingErrorCode
 import com.d35p4c1t0.piffbackup.onboarding.OnboardingProgress
 import com.d35p4c1t0.piffbackup.onboarding.OnboardingRequest
@@ -131,7 +132,11 @@ class MainActivity : AppCompatActivity() {
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    if (hasCompletedAdoption && !binding.homeGroup.root.isVisible) {
+                    if (binding.destinationGroup.isVisible) {
+                        app.remoteDirectoryBrowser.cancel()
+                        app.onboardingCoordinator.discardPendingConnection()
+                        showConnect(activeProfile)
+                    } else if (hasCompletedAdoption && !binding.homeGroup.root.isVisible) {
                         app.initialAdoptionCoordinator.discardPreview()
                         activePreview = null
                         loadExistingProfile(forceConnect = false)
@@ -151,6 +156,12 @@ class MainActivity : AppCompatActivity() {
             binding.hostnameLayout.visibility = if (checked) View.VISIBLE else View.GONE
         }
         binding.connectButton.setOnClickListener { beginConnection() }
+        binding.retryDestinationListButton.setOnClickListener { loadTopLevelDirectories() }
+        binding.changeDestinationConnectionButton.setOnClickListener {
+            app.remoteDirectoryBrowser.cancel()
+            app.onboardingCoordinator.discardPendingConnection()
+            showConnect(activeProfile)
+        }
         binding.openConsoleButton.setOnClickListener {
             runCatching { startActivity(Intent(Intent.ACTION_VIEW, HETZNER_CONSOLE_URL.toUri())) }
         }
@@ -233,7 +244,10 @@ class MainActivity : AppCompatActivity() {
                 hasCompletedAdoption = state.lastSuccessfulBackupAtEpochMillis != null || state.hasCheckpoint
                 activePendingJobId = state.pending?.job?.id
                 val profile = state.profile
-                if (!forceConnect && profile?.setupCompleted == true) {
+                val pendingConnection = app.onboardingCoordinator.pendingConnection()
+                if (!forceConnect && pendingConnection != null) {
+                    showDestinationPicker(pendingConnection)
+                } else if (!forceConnect && profile?.setupCompleted == true) {
                     val pin = runCatching { HostKeyPin.parse(requireNotNull(profile.pinnedHostKey)) }.getOrNull()
                     when {
                         pin == null -> showConnect(profile)
@@ -272,15 +286,8 @@ class MainActivity : AppCompatActivity() {
             showConnectionError(OnboardingErrorCode.INVALID_INPUT)
             return
         }
-        val remoteBasePath = runCatching {
-            RemoteRelativePath.create(binding.remoteBasePathInput.text?.toString()?.trim().orEmpty())
-        }.getOrElse {
-            password.fill('\u0000')
-            showConnectionError(OnboardingErrorCode.INVALID_INPUT)
-            return
-        }
         val request = runCatching {
-            OnboardingRequest(endpoint = endpoint, remoteBasePath = remoteBasePath, password = password)
+            OnboardingRequest(endpoint = endpoint, password = password)
         }.getOrElse {
             password.fill('\u0000')
             showConnectionError(OnboardingErrorCode.INVALID_INPUT)
@@ -289,7 +296,7 @@ class MainActivity : AppCompatActivity() {
         setConnectionBusy(true)
         executor.execute {
             val result = runBlocking {
-                app.onboardingCoordinator.onboard(request) { progress ->
+                app.onboardingCoordinator.connect(request) { progress ->
                     runOnUiThread { if (!isDestroyed) showConnectionProgress(progress) }
                 }
             }
@@ -297,6 +304,7 @@ class MainActivity : AppCompatActivity() {
                 if (isDestroyed) return@runOnUiThread
                 setConnectionBusy(false)
                 when (result) {
+                    is OnboardingResult.Connected -> showDestinationPicker(result.connection)
                     is OnboardingResult.Success -> loadExistingProfile(forceConnect = false)
                     is OnboardingResult.Failure -> showConnectionError(result.code)
                 }
@@ -411,7 +419,6 @@ class MainActivity : AppCompatActivity() {
         showOnly(binding.connectGroup)
         val username = profile?.username.orEmpty()
         binding.usernameInput.setText(username)
-        binding.remoteBasePathInput.setText(profile?.remoteBasePath.orEmpty())
         val derived = "$username.your-storagebox.de"
         val advanced = profile?.hostname?.takeIf { it != derived }
         binding.advancedHostnameToggle.isChecked = advanced != null
@@ -421,6 +428,109 @@ class MainActivity : AppCompatActivity() {
         binding.openConsoleButton.visibility = View.GONE
         binding.connectStatus.visibility = View.GONE
         if (username.isEmpty()) binding.usernameInput.requestFocus() else binding.passwordInput.requestFocus()
+    }
+
+    private fun showDestinationPicker(connection: OnboardingConnection) {
+        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        showOnly(binding.destinationGroup)
+        binding.destinationConnectionSummary.text = getString(
+            R.string.destination_connected_format,
+            connection.endpoint.hostname,
+        )
+        binding.destinationError.visibility = View.GONE
+        binding.retryDestinationListButton.visibility = View.GONE
+        loadTopLevelDirectories()
+    }
+
+    private fun loadTopLevelDirectories() {
+        val connection = app.onboardingCoordinator.pendingConnection() ?: run {
+            showConnect(activeProfile)
+            return
+        }
+        setDestinationBusy(true)
+        binding.destinationStatus.setText(R.string.destination_loading)
+        binding.destinationDirectoryList.removeAllViews()
+        binding.destinationError.visibility = View.GONE
+        binding.retryDestinationListButton.visibility = View.GONE
+        executor.execute {
+            val directories = runCatching {
+                app.remoteDirectoryBrowser.listTopLevel(connection)
+            }.getOrNull()
+            runOnUiThread {
+                if (isDestroyed || !binding.destinationGroup.isVisible) return@runOnUiThread
+                setDestinationBusy(false)
+                if (directories == null) {
+                    binding.destinationStatus.setText(R.string.destination_list_failed)
+                    binding.retryDestinationListButton.visibility = View.VISIBLE
+                } else {
+                    renderTopLevelDirectories(directories)
+                }
+            }
+        }
+    }
+
+    private fun renderTopLevelDirectories(directories: List<RemoteDirectory>) {
+        binding.destinationDirectoryList.removeAllViews()
+        binding.destinationStatus.setText(
+            if (directories.isEmpty()) R.string.destination_empty else R.string.destination_choose,
+        )
+        directories.forEach { directory ->
+            val button = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle)
+            button.text = getString(R.string.use_storage_box_folder_format, directory.name)
+            button.isAllCaps = false
+            button.minHeight = resources.getDimensionPixelSize(R.dimen.adoption_touch_target)
+            button.setOnClickListener { completeDestinationSelection(directory.relativePath) }
+            binding.destinationDirectoryList.addView(button)
+        }
+    }
+
+    private fun completeDestinationSelection(path: String) {
+        val remoteBasePath = runCatching { RemoteRelativePath.create(path) }.getOrElse {
+            showDestinationError(OnboardingErrorCode.INVALID_INPUT)
+            return
+        }
+        setDestinationBusy(true)
+        binding.destinationError.visibility = View.GONE
+        executor.execute {
+            val result = runBlocking {
+                app.onboardingCoordinator.selectDestination(remoteBasePath) { progress ->
+                    runOnUiThread { if (!isDestroyed) showDestinationProgress(progress) }
+                }
+            }
+            runOnUiThread {
+                if (isDestroyed) return@runOnUiThread
+                setDestinationBusy(false)
+                when (result) {
+                    is OnboardingResult.Success -> loadExistingProfile(forceConnect = false)
+                    is OnboardingResult.Failure -> showDestinationError(result.code)
+                    is OnboardingResult.Connected -> Unit
+                }
+            }
+        }
+    }
+
+    private fun setDestinationBusy(busy: Boolean) {
+        binding.destinationProgress.visibility = if (busy) View.VISIBLE else View.GONE
+        binding.changeDestinationConnectionButton.isEnabled = !busy
+        binding.retryDestinationListButton.isEnabled = !busy
+        for (index in 0 until binding.destinationDirectoryList.childCount) {
+            binding.destinationDirectoryList.getChildAt(index).isEnabled = !busy
+        }
+    }
+
+    private fun showDestinationProgress(progress: OnboardingProgress) {
+        binding.destinationStatus.setText(
+            when (progress) {
+                OnboardingProgress.VERIFYING_DESTINATION -> R.string.progress_verifying_destination
+                OnboardingProgress.SAVING -> R.string.progress_saving
+                else -> R.string.destination_loading
+            },
+        )
+    }
+
+    private fun showDestinationError(code: OnboardingErrorCode) {
+        binding.destinationError.visibility = View.VISIBLE
+        binding.destinationError.setText(onboardingErrorMessage(code))
     }
 
     private fun showConnected(profile: StorageBoxProfileEntity, fingerprint: String) {
@@ -1010,7 +1120,6 @@ class MainActivity : AppCompatActivity() {
         binding.connectButton.isEnabled = !busy
         binding.usernameInput.isEnabled = !busy
         binding.passwordInput.isEnabled = !busy
-        binding.remoteBasePathInput.isEnabled = !busy
         binding.advancedHostnameToggle.isEnabled = !busy
         binding.hostnameInput.isEnabled = !busy
         binding.connectProgress.visibility = if (busy) View.VISIBLE else View.GONE
@@ -1027,7 +1136,8 @@ class MainActivity : AppCompatActivity() {
                 OnboardingProgress.PREPARING_KEY -> R.string.progress_preparing_key
                 OnboardingProgress.CONNECTING_WITH_PASSWORD -> R.string.progress_connecting_password
                 OnboardingProgress.INSTALLING_KEY -> R.string.progress_installing_key
-                OnboardingProgress.VERIFYING_KEY_AND_DESTINATION -> R.string.progress_verifying
+                OnboardingProgress.VERIFYING_KEY -> R.string.progress_verifying_key
+                OnboardingProgress.VERIFYING_DESTINATION -> R.string.progress_verifying_destination
                 OnboardingProgress.SAVING -> R.string.progress_saving
             },
         )
@@ -1036,8 +1146,16 @@ class MainActivity : AppCompatActivity() {
     private fun showConnectionError(code: OnboardingErrorCode) {
         binding.connectStatus.visibility = View.GONE
         binding.connectError.visibility = View.VISIBLE
-        binding.connectError.setText(
-            when (code) {
+        binding.connectError.setText(onboardingErrorMessage(code))
+        binding.openConsoleButton.visibility = if (
+            code == OnboardingErrorCode.NETWORK_UNAVAILABLE ||
+            code == OnboardingErrorCode.HOST_KEY_CHANGED ||
+            code == OnboardingErrorCode.KEY_INSTALL_FAILED
+        ) View.VISIBLE else View.GONE
+    }
+
+    private fun onboardingErrorMessage(code: OnboardingErrorCode): Int =
+        when (code) {
                 OnboardingErrorCode.INVALID_INPUT -> R.string.error_invalid_input
                 OnboardingErrorCode.NETWORK_UNAVAILABLE -> R.string.error_network
                 OnboardingErrorCode.AUTHENTICATION_FAILED -> R.string.error_authentication
@@ -1046,14 +1164,7 @@ class MainActivity : AppCompatActivity() {
                 OnboardingErrorCode.KEY_VERIFICATION_FAILED -> R.string.error_key_verify
                 OnboardingErrorCode.DESTINATION_NOT_FOUND -> R.string.error_destination_missing
                 OnboardingErrorCode.SECURE_STORAGE_FAILED -> R.string.error_secure_storage
-            },
-        )
-        binding.openConsoleButton.visibility = if (
-            code == OnboardingErrorCode.NETWORK_UNAVAILABLE ||
-            code == OnboardingErrorCode.HOST_KEY_CHANGED ||
-            code == OnboardingErrorCode.KEY_INSTALL_FAILED
-        ) View.VISIBLE else View.GONE
-    }
+        }
 
     private fun showOnly(visible: View) {
         val screenChanged = currentScreen !== visible
@@ -1062,6 +1173,7 @@ class MainActivity : AppCompatActivity() {
             binding.homeGroup.root,
             binding.settingsGroup.root,
             binding.connectGroup,
+            binding.destinationGroup,
             binding.connectedGroup,
             binding.adoptionMappingGroup,
             binding.adoptionPreviewGroup,

@@ -30,28 +30,24 @@ class OnboardingModelsTest {
     }
 
     @Test
-    fun `requires an explicit top level backup folder`() {
+    fun `credentials can connect before a backup folder is known`() {
         val endpoint = StorageBoxEndpoint.create("u123456", null)
         val request = OnboardingRequest(
             endpoint = endpoint,
-            remoteBasePath = RemoteRelativePath.create("Matteo/"),
             password = "secret".toCharArray(),
         )
 
-        assertEquals("Matteo", request.remoteBasePath.value)
+        assertEquals(endpoint, request.endpoint)
+    }
+
+    @Test
+    fun `selected backup folder must be a safe top level root`() {
+        requireValidStorageBoxBackupRoot(RemoteRelativePath.create("Matteo/"))
         assertThrows(IllegalArgumentException::class.java) {
-            OnboardingRequest(
-                endpoint = endpoint,
-                remoteBasePath = RemoteRelativePath.create("parent/child"),
-                password = "secret".toCharArray(),
-            )
+            requireValidStorageBoxBackupRoot(RemoteRelativePath.create("parent/child"))
         }
         assertThrows(IllegalArgumentException::class.java) {
-            OnboardingRequest(
-                endpoint = endpoint,
-                remoteBasePath = RemoteRelativePath.create("Matteo;touch"),
-                password = "secret".toCharArray(),
-            )
+            requireValidStorageBoxBackupRoot(RemoteRelativePath.create("Matteo;touch"))
         }
     }
 }

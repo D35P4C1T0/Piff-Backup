@@ -32,7 +32,13 @@ enum class DestinationVerification {
     TIMED_OUT,
 }
 
-fun interface StorageBoxDestinationVerifier {
+interface StorageBoxDestinationVerifier {
+    fun verifyAuthentication(
+        endpoint: StorageBoxEndpoint,
+        privateKey: File,
+        sshHomeDirectory: File,
+    ): DestinationVerification
+
     fun verify(
         endpoint: StorageBoxEndpoint,
         remoteBasePath: RemoteRelativePath,
@@ -47,25 +53,30 @@ class NativeStorageBoxDestinationVerifier(
 ) : StorageBoxDestinationVerifier {
     private val sshClient = NativeToolLocator(context).require(NativeTool.SSH_CLIENT)
 
-    override fun verify(
+    override fun verifyAuthentication(
         endpoint: StorageBoxEndpoint,
-        remoteBasePath: RemoteRelativePath,
         privateKey: File,
         sshHomeDirectory: File,
     ): DestinationVerification {
-        val config = StrictSshConfig(
-            username = endpoint.username,
-            hostname = endpoint.hostname,
-            port = endpoint.port,
-            identityFile = privateKey,
-            sshHomeDirectory = sshHomeDirectory,
-        )
+        val config = strictConfig(endpoint, privateKey, sshHomeDirectory)
         val authentication = run(config, StorageBoxVerificationCommands.AUTHENTICATION_CHECK)
         if (authentication.timedOut) return DestinationVerification.TIMED_OUT
         if (authentication.exitCode != 0 || authentication.cancelled) {
             logSafeFailure("authentication", authentication, config)
             return DestinationVerification.KEY_AUTHENTICATION_FAILED
         }
+        return DestinationVerification.VERIFIED
+    }
+
+    override fun verify(
+        endpoint: StorageBoxEndpoint,
+        remoteBasePath: RemoteRelativePath,
+        privateKey: File,
+        sshHomeDirectory: File,
+    ): DestinationVerification {
+        val authentication = verifyAuthentication(endpoint, privateKey, sshHomeDirectory)
+        if (authentication != DestinationVerification.VERIFIED) return authentication
+        val config = strictConfig(endpoint, privateKey, sshHomeDirectory)
         val destination = run(config, StorageBoxVerificationCommands.destinationCheck(remoteBasePath))
         if (destination.timedOut) return DestinationVerification.TIMED_OUT
         if (destination.exitCode != 0 || destination.cancelled) {
@@ -74,6 +85,18 @@ class NativeStorageBoxDestinationVerifier(
         }
         return DestinationVerification.VERIFIED
     }
+
+    private fun strictConfig(
+        endpoint: StorageBoxEndpoint,
+        privateKey: File,
+        sshHomeDirectory: File,
+    ) = StrictSshConfig(
+        username = endpoint.username,
+        hostname = endpoint.hostname,
+        port = endpoint.port,
+        identityFile = privateKey,
+        sshHomeDirectory = sshHomeDirectory,
+    )
 
     private fun run(
         config: StrictSshConfig,
