@@ -39,9 +39,8 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           packages: >-
-            tools
             platform-tools
-            platforms;android-37
+            platforms;android-37.0
             build-tools;36.0.0
 
       - name: Set up Gradle
@@ -132,9 +131,8 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           packages: >-
-            tools
             platform-tools
-            platforms;android-37
+            platforms;android-37.0
             build-tools;36.0.0
 
       - name: Set up Gradle
