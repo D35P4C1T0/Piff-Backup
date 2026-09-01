@@ -18,6 +18,7 @@
 local.properties
 
 # Signing and local credentials
+/.signing/
 *.jks
 *.keystore
 *.p12
