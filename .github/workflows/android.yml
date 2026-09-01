@@ -85,20 +85,31 @@ jobs:
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
-          if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-            echo "Release tags must use vMAJOR.MINOR.PATCH, for example v1.2.3." >&2
+          if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-beta\.([0-9]+))?$ ]]; then
+            echo "Release tags must use vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-beta.NUMBER." >&2
             exit 1
           fi
 
           major="${BASH_REMATCH[1]}"
           minor="${BASH_REMATCH[2]}"
           patch="${BASH_REMATCH[3]}"
-          if (( 10#$minor > 999 || 10#$patch > 999 )); then
-            echo "Minor and patch versions must be between 0 and 999." >&2
+          beta="${BASH_REMATCH[5]:-}"
+          if (( 10#$major > 20 || 10#$minor > 99 || 10#$patch > 99 )); then
+            echo "Version exceeds Android version-code limits." >&2
             exit 1
           fi
 
-          version_code=$((10#$major * 1000000 + 10#$minor * 1000 + 10#$patch))
+          version_code=$((10#$major * 100000000 + 10#$minor * 1000000 + 10#$patch * 1000))
+          if [[ -n "$beta" ]]; then
+            if (( 10#$beta < 1 || 10#$beta > 998 )); then
+              echo "Beta number must be between 1 and 998." >&2
+              exit 1
+            fi
+            version_code=$((version_code + 10#$beta))
+          else
+            version_code=$((version_code + 999))
+          fi
+
           if (( version_code < 1 || version_code > 2100000000 )); then
             echo "The derived Android version code is outside the valid range." >&2
             exit 1
@@ -191,14 +202,22 @@ jobs:
           retention-days: 30
 
       - name: Create GitHub Release
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create "${GITHUB_REF_NAME}"
-          release/*
-          --verify-tag
-          --generate-notes
-          --title "PiffBackup ${PIFFBACKUP_VERSION_NAME}"
+        run: |
+          set -euo pipefail
+          release_flags=()
+          if [[ "$GITHUB_REF_NAME" == *-beta.* ]]; then
+            release_flags+=(--prerelease)
+          fi
+
+          gh release create "$GITHUB_REF_NAME" \
+            release/* \
+            --verify-tag \
+            --generate-notes \
+            --title "PiffBackup ${PIFFBACKUP_VERSION_NAME}" \
+            "${release_flags[@]}"
 
       - name: Remove decoded keystore
         if: always()

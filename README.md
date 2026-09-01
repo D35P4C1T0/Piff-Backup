@@ -95,10 +95,11 @@ debug build, Android-test compilation, and optimized release build for every
 push and pull request. The resulting debug and unsigned release APKs are retained
 as short-lived workflow artifacts.
 
-Pushing a stable semantic-version tag such as `v1.2.3` also builds, signs, and
-verifies an APK, generates its SHA-256 checksum, and creates a GitHub Release
-with generated release notes. Configure these GitHub Actions repository secrets
-before pushing a release tag:
+Pushing a semantic-version tag such as `v1.2.3` or `v1.2.3-beta.1` also builds,
+signs, and verifies an APK, generates its SHA-256 checksum, and creates a GitHub
+Release with generated release notes. Beta tags are marked as GitHub
+prereleases. Configure these GitHub Actions repository secrets before pushing a
+release tag:
 
 | Secret | Value |
 | --- | --- |
@@ -118,8 +119,8 @@ Losing the signing key prevents compatible upgrades to previously installed
 releases. Once the secrets are configured, publish a release with:
 
 ```bash
-git tag v1.2.3
-git push origin v1.2.3
+git tag v1.2.3-beta.1
+git push origin v1.2.3-beta.1
 ```
 
 ## Security and privacy
