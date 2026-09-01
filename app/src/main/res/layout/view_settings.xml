@@ -1,46 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:accessibilityPaneTitle="@string/settings"
     android:orientation="vertical"
     android:visibility="gone">
 
-    <TextView
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/settings_toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:accessibilityHeading="true"
-        android:text="@string/settings"
-        android:textAppearance="?attr/textAppearanceHeadlineMedium" />
+        android:minHeight="56dp"
+        app:navigationContentDescription="@string/back"
+        app:navigationIcon="@drawable/ic_arrow_back"
+        app:title="@string/settings"
+        app:titleTextAppearance="?attr/textAppearanceTitleLarge" />
 
     <TextView
-        android:id="@+id/settings_connection_summary"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="20dp"
-        android:textAppearance="?attr/textAppearanceBodyLarge" />
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="20dp"
-        android:text="@string/server_fingerprint_label"
-        android:textAppearance="?attr/textAppearanceLabelLarge" />
-
-    <TextView
-        android:id="@+id/settings_fingerprint"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:fontFamily="monospace"
-        android:textIsSelectable="true"
-        android:textAppearance="?attr/textAppearanceBodySmall" />
+        style="@style/PiffBackup.SectionLabel"
+        android:layout_marginTop="16dp"
+        android:text="@string/backup_behavior" />
 
     <com.google.android.material.materialswitch.MaterialSwitch
         android:id="@+id/automatic_upload_switch"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
+        android:layout_marginTop="8dp"
         android:minHeight="56dp"
         android:text="@string/automatic_upload_after_discovery" />
 
@@ -49,38 +35,82 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:text="@string/automatic_upload_help"
-        android:textAppearance="?attr/textAppearanceBodySmall" />
+        android:textAppearance="?attr/textAppearanceBodySmall"
+        android:textColor="?attr/colorOnSurfaceVariant" />
+
+    <TextView
+        style="@style/PiffBackup.SectionLabel"
+        android:layout_marginTop="32dp"
+        android:text="@string/reliability" />
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
+        android:layout_marginTop="8dp"
         android:text="@string/battery_reliability_help"
         android:textAppearance="?attr/textAppearanceBodyMedium" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/open_battery_settings_button"
-        style="?attr/materialButtonOutlinedStyle"
-        android:layout_width="match_parent"
+        style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="4dp"
         android:minHeight="48dp"
         android:text="@string/open_battery_settings" />
 
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/settings_change_connection_button"
-        style="?attr/materialButtonOutlinedStyle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:minHeight="48dp"
-        android:text="@string/change_connection" />
+    <TextView
+        style="@style/PiffBackup.SectionLabel"
+        android:layout_marginTop="28dp"
+        android:text="@string/storage_box" />
 
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/settings_back_button"
+    <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:minHeight="48dp"
-        android:text="@string/back_to_home" />
+        android:layout_marginTop="8dp"
+        app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
+        app:cardElevation="0dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingTop="16dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="8dp">
+
+            <TextView
+                android:id="@+id/settings_connection_summary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAppearance="?attr/textAppearanceBodyLarge" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/server_fingerprint_label"
+                android:textAppearance="?attr/textAppearanceLabelLarge"
+                android:textColor="?attr/colorOnSurfaceVariant" />
+
+            <TextView
+                android:id="@+id/settings_fingerprint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:fontFamily="monospace"
+                android:textIsSelectable="true"
+                android:textAppearance="?attr/textAppearanceBodySmall" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/settings_change_connection_button"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:minHeight="48dp"
+                android:text="@string/change_connection" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
 </LinearLayout>

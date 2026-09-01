@@ -27,7 +27,7 @@ class PiffBackupJobService : JobService() {
         val app = application as PiffBackupApp
         task = scope.launch {
             val result = app.backupExecutor.execute(jobId) { event ->
-                if (event.status == BackupProgressStatus.RUNNING) {
+                if (event.status == BackupProgressStatus.RUNNING && event.fileName == null) {
                     BackupNotifications.update(this@PiffBackupJobService, jobId, event.percentage)
                 }
             }

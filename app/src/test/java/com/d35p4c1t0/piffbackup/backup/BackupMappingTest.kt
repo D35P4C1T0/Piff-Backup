@@ -40,10 +40,10 @@ class BackupMappingTest {
     @Test
     fun `remote path accepts ordinary unicode but rejects unsafe components`() {
         assertEquals(
-            "Matteo/Family's album 😄/",
-            RemoteRelativePath.create("Matteo/Family's album 😄/").pathWithTrailingSlash,
+            "Backups/Family's album 😄/",
+            RemoteRelativePath.create("Backups/Family's album 😄/").pathWithTrailingSlash,
         )
-        listOf("/Matteo/Camera", "Matteo/../Other", "Matteo//Camera", "Matteo/./Camera", "Matteo/a\nb").forEach {
+        listOf("/Backups/Camera", "Backups/../Other", "Backups//Camera", "Backups/./Camera", "Backups/a\nb").forEach {
             assertThrows(IllegalArgumentException::class.java) { RemoteRelativePath.create(it) }
         }
     }
@@ -51,14 +51,14 @@ class BackupMappingTest {
     @Test
     fun `rejects local overlap remote overlap and paths outside configured root`() {
         val shared = Files.createTempDirectory("piffbackup-overlap").toFile()
-        val remoteBase = RemoteRelativePath.create("Matteo")
+        val remoteBase = RemoteRelativePath.create("Backups")
         val pictures = BackupMapping(
             CanonicalLocalRoot.create(File(shared, "Pictures").path, shared),
-            RemoteRelativePath.create("Matteo/Pictures"),
+            RemoteRelativePath.create("Backups/Pictures"),
         )
         val screenshots = BackupMapping(
             CanonicalLocalRoot.create(File(shared, "Pictures/Screenshots").path, shared),
-            RemoteRelativePath.create("Matteo/Screenshots"),
+            RemoteRelativePath.create("Backups/Screenshots"),
         )
         assertThrows(IllegalArgumentException::class.java) {
             BackupMappingValidator.validate(listOf(pictures, screenshots), remoteBase)
@@ -66,7 +66,7 @@ class BackupMappingTest {
 
         val camera = BackupMapping(
             CanonicalLocalRoot.create(File(shared, "DCIM/Camera").path, shared),
-            RemoteRelativePath.create("Matteo/Pictures/Camera"),
+            RemoteRelativePath.create("Backups/Pictures/Camera"),
         )
         assertThrows(IllegalArgumentException::class.java) {
             BackupMappingValidator.validate(listOf(pictures, camera), remoteBase)

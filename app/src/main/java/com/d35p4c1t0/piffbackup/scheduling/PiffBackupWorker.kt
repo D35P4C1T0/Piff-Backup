@@ -27,7 +27,7 @@ class PiffBackupWorker(
         return try {
             when (
                 app.backupExecutor.execute(jobId) { event ->
-                    if (event.status == BackupProgressStatus.RUNNING) {
+                    if (event.status == BackupProgressStatus.RUNNING && event.fileName == null) {
                         BackupNotifications.update(applicationContext, jobId, event.percentage)
                     }
                 }

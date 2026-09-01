@@ -1,6 +1,6 @@
 # Native tools
 
-Phase 1 pins and cross-compiles these executables for Android `arm64-v8a`:
+These scripts pin and cross-compile the following executables for Android `arm64-v8a`:
 
 - rsync 3.4.2
 - Dropbear 2025.89: `dbclient`, `dropbearkey`, and `dropbearconvert`
@@ -37,11 +37,12 @@ writable directory.
 
 ## Safety
 
-The in-app Phase 1 check is local-only. It runs `--version` and an rsync dry run
+The in-app feasibility check is local-only. It runs `--version` and an rsync dry run
 between two empty directories under the app cache. It cannot touch a Storage
 Box or a real user backup folder.
 
 Remote device verification must use a dedicated disposable server path such as
 `.piffbackup-test/<random-id>/`, never user media. A host key must already be in
 the app-private `HOME/.ssh/known_hosts`; `StrictHostKeyChecking=yes` is mandatory.
-See `PHASE1_NATIVE_SPIKE.md` at the project root.
+The Android instrumentation suite also verifies that the packaged executables
+launch from `ApplicationInfo.nativeLibraryDir` on a supported ARM64 device.

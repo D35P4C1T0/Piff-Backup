@@ -165,7 +165,7 @@ class RoomDurabilityInstrumentedTest {
                     id = PROFILE_ID,
                     username = "u123456",
                     hostname = "u123456.your-storagebox.de",
-                    remoteBasePath = "Matteo",
+                    remoteBasePath = "Backups",
                     setupCompleted = true,
                 ),
             )
@@ -174,8 +174,8 @@ class RoomDurabilityInstrumentedTest {
         }
 
         fun mappingInputs(): List<FolderMappingInput> = listOf(
-            mappingInput(MAPPING_CAMERA, "DCIM/Camera", "Matteo/Camera"),
-            mappingInput(MAPPING_MOVIES, "Movies", "Matteo/Videos"),
+            mappingInput(MAPPING_CAMERA, "DCIM/Camera", "Backups/Camera"),
+            mappingInput(MAPPING_MOVIES, "Movies", "Backups/Videos"),
         )
 
         suspend fun createPendingJob(): com.d35p4c1t0.piffbackup.data.DurablePendingJob {
@@ -186,13 +186,13 @@ class RoomDurabilityInstrumentedTest {
                 window = MediaGenerationWindow(10L, 20L),
                 transfers = listOf(
                     PlannedMediaTransfer(
-                        mapping = mediaMapping("DCIM/Camera", "Matteo/Camera"),
+                        mapping = mediaMapping("DCIM/Camera", "Backups/Camera"),
                         fileList = cameraList,
                         itemCount = 2L,
                         totalBytes = 20L,
                     ),
                     PlannedMediaTransfer(
-                        mapping = mediaMapping("Movies", "Matteo/Videos"),
+                        mapping = mediaMapping("Movies", "Backups/Videos"),
                         fileList = moviesList,
                         itemCount = 1L,
                         totalBytes = 30L,

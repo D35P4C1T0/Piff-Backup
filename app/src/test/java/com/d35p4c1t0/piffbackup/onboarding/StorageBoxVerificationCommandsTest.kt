@@ -13,9 +13,9 @@ class StorageBoxVerificationCommandsTest {
     fun `destination verification is read only and uses the selected folder`() {
         assertEquals(listOf("pwd"), StorageBoxVerificationCommands.AUTHENTICATION_CHECK)
         val destinationCheck = StorageBoxVerificationCommands.destinationCheck(
-            RemoteRelativePath.create("Matteo"),
+            RemoteRelativePath.create("Backups"),
         )
-        assertEquals(listOf("ls", "-d", "Matteo/"), destinationCheck)
+        assertEquals(listOf("ls", "-d", "Backups/"), destinationCheck)
 
         val allArguments = StorageBoxVerificationCommands.AUTHENTICATION_CHECK +
             destinationCheck
@@ -27,7 +27,7 @@ class StorageBoxVerificationCommandsTest {
     fun `destination check rejects remote shell syntax`() {
         org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
             StorageBoxVerificationCommands.destinationCheck(
-                RemoteRelativePath.create("Matteo;touch"),
+                RemoteRelativePath.create("Backups;touch"),
             )
         }
     }

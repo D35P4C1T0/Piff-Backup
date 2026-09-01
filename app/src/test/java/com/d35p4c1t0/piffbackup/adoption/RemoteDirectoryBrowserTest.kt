@@ -21,10 +21,10 @@ class RemoteDirectoryBrowserTest {
 
         assertEquals(
             listOf(
-                RemoteDirectory("Camera", "Matteo/Camera"),
-                RemoteDirectory("Trips 😄", "Matteo/Trips 😄"),
+                RemoteDirectory("Camera", "Backups/Camera"),
+                RemoteDirectory("Trips 😄", "Backups/Trips 😄"),
             ),
-            RemoteDirectoryListParser.parse(RemoteRelativePath.create("Matteo"), output),
+            RemoteDirectoryListParser.parse(RemoteRelativePath.create("Backups"), output),
         )
     }
 
@@ -40,7 +40,7 @@ class RemoteDirectoryBrowserTest {
                 identityFile = File("/private/key"),
                 sshHomeDirectory = File("/private/home"),
             ),
-            parent = RemoteRelativePath.create("Matteo/Family's photos"),
+            parent = RemoteRelativePath.create("Backups/Family's photos"),
         )
 
         assertTrue("--list-only" in arguments)
@@ -49,13 +49,13 @@ class RemoteDirectoryBrowserTest {
         assertFalse(arguments.any { it.startsWith("--out-format=") })
         assertFalse("--recursive" in arguments || "-r" in arguments)
         assertFalse(arguments.any { it == "--delete" || it.startsWith("--delete-") })
-        assertEquals("u123456@u123456.your-storagebox.de:Matteo/Family's photos/", arguments.last())
+        assertEquals("u123456@u123456.your-storagebox.de:Backups/Family's photos/", arguments.last())
     }
 
     @Test
     fun `top level parser returns only valid backup roots`() {
         val output = listOf(
-            "drwxr-xr-x          4,096 2026/08/24 22:14:49 Matteo/",
+            "drwxr-xr-x          4,096 2026/08/24 22:14:49 Backups/",
             "drwxr-xr-x          4,096 2026/08/24 22:14:49 Family photos/",
             "drwxr-xr-x          4,096 2026/08/24 22:14:49 backup_2026/",
         ).joinToString("\n")
@@ -63,7 +63,7 @@ class RemoteDirectoryBrowserTest {
         assertEquals(
             listOf(
                 RemoteDirectory("backup_2026", "backup_2026"),
-                RemoteDirectory("Matteo", "Matteo"),
+                RemoteDirectory("Backups", "Backups"),
             ),
             RemoteDirectoryListParser.parseTopLevel(output),
         )

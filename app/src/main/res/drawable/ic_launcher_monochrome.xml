@@ -5,7 +5,7 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="@color/launcher_foreground"
+        android:fillColor="#FF000000"
         android:fillType="evenOdd"
         android:pathData="M37,78 C27.6,78 20,70.4 20,61 C20,52.5 26.3,45.5 34.5,44.2 C38.2,33.2 48.4,26 60.2,26 C74.3,26 85.8,37.1 86.3,51.1 C91.7,54.1 95,59.6 95,66 C95,72.6 89.6,78 83,78 Z M50,67 L50,53 L44.5,58.5 L39.5,53.5 L54,39 L68.5,53.5 L63.5,58.5 L58,53 L58,67 Z" />
 </vector>

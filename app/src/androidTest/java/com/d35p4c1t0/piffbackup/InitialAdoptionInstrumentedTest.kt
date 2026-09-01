@@ -105,10 +105,10 @@ class InitialAdoptionInstrumentedTest {
             assertEquals(
                 result.stdout,
                 listOf(
-                    RemoteDirectory("Camera", "Matteo/Camera"),
-                    RemoteDirectory("Trips 😄", "Matteo/Trips 😄"),
+                    RemoteDirectory("Camera", "Backups/Camera"),
+                    RemoteDirectory("Trips 😄", "Backups/Trips 😄"),
                 ),
-                RemoteDirectoryListParser.parse(RemoteRelativePath.create("Matteo"), result.stdout),
+                RemoteDirectoryListParser.parse(RemoteRelativePath.create("Backups"), result.stdout),
             )
         } finally {
             root.deleteRecursively()
@@ -211,7 +211,7 @@ class InitialAdoptionInstrumentedTest {
                 treeUri = "content://com.android.externalstorage.documents/tree/primary%3ACamera",
                 canonicalLocalPath = camera.path,
                 relativeMediaStorePrefix = "Camera/",
-                relativeRemotePath = "Matteo/Camera",
+                relativeRemotePath = "Backups/Camera",
                 mode = MappingModeValue.MEDIA_FAST,
             ),
             FolderMappingInput(
@@ -220,7 +220,7 @@ class InitialAdoptionInstrumentedTest {
                 treeUri = "content://com.android.externalstorage.documents/tree/primary%3AEmpty",
                 canonicalLocalPath = empty.path,
                 relativeMediaStorePrefix = "Empty/",
-                relativeRemotePath = "Matteo/Empty",
+                relativeRemotePath = "Backups/Empty",
                 mode = MappingModeValue.ALL_FILES,
             ),
         )
@@ -251,7 +251,7 @@ class InitialAdoptionInstrumentedTest {
                     id = PROFILE_ID,
                     username = "u123456",
                     hostname = "u123456.your-storagebox.de",
-                    remoteBasePath = "Matteo",
+                    remoteBasePath = "Backups",
                     encryptedCredentialRef = "fake-ref",
                     pinnedHostKey = "ssh-ed25519 AQID",
                     setupCompleted = true,
@@ -302,8 +302,10 @@ class InitialAdoptionInstrumentedTest {
             root: InitialRootFileList,
             ssh: StrictSshConfig,
             onProgress: (RsyncProgress) -> Unit,
+            onFile: (String) -> Unit,
         ): RsyncExecutionResult {
             lastTransferFile = root.file
+            onFile("Camera/photo.jpg")
             onProgress(RsyncProgress(5L, 100))
             return if (failTransfer) result(null, RsyncExitKind.PARTIAL_TRANSFER_ERROR) else result(null)
         }

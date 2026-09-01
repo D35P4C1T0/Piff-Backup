@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" role="img" aria-labelledby="title description">
+  <title id="title">PiffBackup app icon</title>
+  <desc id="description">A minimal cloud with an upward backup arrow cut from its center.</desc>
+  <rect width="108" height="108" fill="#176B57"/>
+  <path
+    fill="#F2FFF9"
+    fill-rule="evenodd"
+    d="M37 78C27.6 78 20 70.4 20 61c0-8.5 6.3-15.5 14.5-16.8C38.2 33.2 48.4 26 60.2 26c14.1 0 25.6 11.1 26.1 25.1C91.7 54.1 95 59.6 95 66c0 6.6-5.4 12-12 12H37Zm13-11V53l-5.5 5.5-5-5L54 39l14.5 14.5-5 5L58 53v14h-8Z"
+  />
+</svg>

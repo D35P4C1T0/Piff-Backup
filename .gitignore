@@ -16,3 +16,21 @@
 /tools/native/.build/
 /tools/native/downloads/
 local.properties
+
+# Signing and local credentials
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+keystore.properties
+signing.properties
+credentials.properties
+.env
+.env.*
+!.env.example
+
+# Local release artifacts
+*.apk
+*.aab

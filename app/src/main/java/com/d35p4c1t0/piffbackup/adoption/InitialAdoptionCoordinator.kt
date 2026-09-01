@@ -51,6 +51,7 @@ data class AdoptionTransferProgress(
     val rootCount: Int,
     val rootName: String,
     val percentage: Int,
+    val fileName: String? = null,
 )
 
 enum class InitialAdoptionError {
@@ -75,6 +76,7 @@ interface AdoptionRsyncExecutor {
         root: InitialRootFileList,
         ssh: StrictSshConfig,
         onProgress: (RsyncProgress) -> Unit,
+        onFile: (String) -> Unit,
     ): RsyncExecutionResult
 
     fun cancel()
@@ -96,9 +98,10 @@ class NativeAdoptionRsyncExecutor(context: Context) : AdoptionRsyncExecutor {
         root: InitialRootFileList,
         ssh: StrictSshConfig,
         onProgress: (RsyncProgress) -> Unit,
+        onFile: (String) -> Unit,
     ): RsyncExecutionResult {
         val command = builder(root).adoptionTransfer(root.mapping, ssh, root.file)
-        return execute(command, ssh.sshHomeDirectory, onProgress)
+        return execute(command, ssh.sshHomeDirectory, onProgress, onFile)
     }
 
     override fun cancel() {
@@ -109,8 +112,9 @@ class NativeAdoptionRsyncExecutor(context: Context) : AdoptionRsyncExecutor {
         command: com.d35p4c1t0.piffbackup.rsync.RsyncCommand,
         workingDirectory: File,
         onProgress: (RsyncProgress) -> Unit = {},
+        onFile: (String) -> Unit = {},
     ): RsyncExecutionResult {
-        val process = engine.start(command, workingDirectory, onProgress)
+        val process = engine.start(command, workingDirectory, onProgress, onFile)
         running = process
         return try {
             process.await()
@@ -247,16 +251,25 @@ class InitialAdoptionCoordinator(
                 val ssh = strictConfig(profile, key)
                 preview.roots.forEachIndexed { index, root ->
                     if (root.summary.itemsToUpload == 0L) return@forEachIndexed
-                    val result = rsync.transfer(root.files, ssh) { progress ->
-                        onProgress(
-                            AdoptionTransferProgress(
-                                rootNumber = index + 1,
-                                rootCount = preview.roots.size,
-                                rootName = root.files.entity.displayName,
-                                percentage = progress.percentage,
-                            ),
-                        )
-                    }
+                    var latestPercentage = 0
+                    fun report(fileName: String? = null) = onProgress(
+                        AdoptionTransferProgress(
+                            rootNumber = index + 1,
+                            rootCount = preview.roots.size,
+                            rootName = root.files.entity.displayName,
+                            percentage = latestPercentage,
+                            fileName = fileName,
+                        ),
+                    )
+                    val result = rsync.transfer(
+                        root = root.files,
+                        ssh = ssh,
+                        onProgress = { progress ->
+                            latestPercentage = progress.percentage
+                            report()
+                        },
+                        onFile = { fileName -> report(fileName) },
+                    )
                     if (result.exitKind == RsyncExitKind.CANCELLED) {
                         throw AdoptionOperationException(InitialAdoptionError.CANCELLED)
                     }

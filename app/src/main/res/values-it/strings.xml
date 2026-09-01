@@ -3,6 +3,8 @@
     <string name="welcome_description">Esegui il backup di foto e video nel tuo Storage Box privato.</string>
     <string name="set_up_backup">Configura il backup</string>
     <string name="back_up_now">Esegui backup ora</string>
+    <string name="backup_status">Stato del backup</string>
+    <string name="manage_backup">Gestisci backup</string>
     <string name="home_up_to_date_detail">Avvia un controllo quando hai nuove foto, nuovi video o file.</string>
     <string name="looking_for_new_media">Ricerca di nuove foto e nuovi video…</string>
     <string name="discovery_safe_detail">Controllo delle cartelle selezionate senza eliminare nulla.</string>
@@ -14,6 +16,9 @@
     <string name="backup_paused_detail">I progressi sono al sicuro. Riprendi quando vuoi.</string>
     <string name="needs_attention">Richiede attenzione</string>
     <string name="needs_attention_detail">Controlla le cartelle ed esegui nuovamente il backup.</string>
+    <string name="no_folders_detail">Scegli almeno una cartella del telefono da includere nel backup.</string>
+    <string name="choose_folders">Scegli cartelle</string>
+    <string name="try_again">Riprova</string>
     <string name="resume_backup">Riprendi</string>
     <string name="pause_backup">Metti in pausa</string>
     <string name="last_backup_format">Ultimo backup riuscito: %1$s</string>
@@ -26,12 +31,18 @@
     </plurals>
     <string name="folders">Cartelle</string>
     <string name="settings">Impostazioni</string>
+    <string name="backup_behavior">Comportamento backup</string>
+    <string name="reliability">Affidabilità</string>
+    <string name="storage_box">Storage Box</string>
     <string name="back_to_home">Torna alla schermata principale</string>
     <string name="back">Indietro</string>
     <string name="connect_storage_box">Collega Storage Box</string>
     <string name="connect_explanation">Inserisci una sola volta la password dello Storage Box. PiffBackup installerà una chiave dedicata, cancellerà la password senza salvarla e poi ti farà scegliere la cartella di backup.</string>
     <string name="storage_box_username">Nome utente</string>
     <string name="storage_box_password">Password</string>
+    <string name="username_required">Inserisci il nome utente dello Storage Box.</string>
+    <string name="password_required">Inserisci la password dello Storage Box.</string>
+    <string name="server_address_required">Inserisci l’indirizzo del server.</string>
     <string name="remote_base_path">Cartella di backup</string>
     <string name="remote_base_path_help">Cartella principale esistente; usa lettere, numeri, punto, trattino basso o trattino</string>
     <string name="use_different_server">Usa un indirizzo server diverso</string>
@@ -50,10 +61,7 @@
     <string name="use_storage_box_folder_format">Usa %1$s/</string>
     <string name="retry_folder_list">Riprova</string>
     <string name="open_hetzner_console">Apri Hetzner Console</string>
-    <string name="storage_box_connected">Storage Box collegato</string>
-    <string name="connected_summary">Chiave dedicata verificata per %1$s. La cartella di backup esistente %2$s è stata trovata senza modificarla.</string>
     <string name="server_fingerprint_label">Impronta del server</string>
-    <string name="fingerprint_help">PiffBackup si fermerà se l’identità del server cambia. Puoi confrontarla con l’impronta mostrata da Hetzner.</string>
     <string name="fingerprint_unavailable">Impronta non disponibile</string>
     <string name="settings_connection_summary">Collegato a %1$s\nCartella di backup: %2$s</string>
     <string name="automatic_upload_after_discovery">Avvia automaticamente il caricamento dopo la ricerca</string>
@@ -76,6 +84,7 @@
     <string name="error_destination_missing">Connessione sicura riuscita, ma la cartella di backup selezionata non è stata trovata. Nulla è stato creato o modificato.</string>
     <string name="error_secure_storage">Impossibile salvare la connessione protetta su questo dispositivo. Nessun backup è stato avviato.</string>
     <string name="choose_backup_folders">Scegli le cartelle di backup</string>
+    <string name="folder_screen_connection_summary">%1$s · Cartella di backup %2$s</string>
     <string name="all_files_access_explanation">PiffBackup deve accedere ai file scelti per consentire allo strumento di backup di leggerli direttamente. Non può aprire i dati privati delle altre app.</string>
     <string name="storage_access_granted">L’accesso alle cartelle è pronto</string>
     <string name="storage_access_missing">Prima di continuare è necessario consentire l’accesso alle cartelle</string>
@@ -84,6 +93,9 @@
     <string name="folder_setup_details">Informazioni sull’accesso</string>
     <string name="no_folders_configured">Nessuna cartella selezionata.</string>
     <string name="add_local_folder">Aggiungi una cartella</string>
+    <string name="phone_folder">Cartella del telefono</string>
+    <string name="storage_box_destination">Destinazione Storage Box</string>
+    <string name="files_included">File inclusi</string>
     <string name="clear_selected_folders">Rimuovi cartelle selezionate</string>
     <string name="remove_folder_format">Rimuovi %1$s</string>
     <string name="selected_local_folder_format">Cartella sul telefono: %1$s</string>
@@ -133,6 +145,7 @@
     <string name="no_new_items_found">Non sono stati trovati elementi nuovi o modificati.</string>
     <string name="backup_finished_format">Backup completato correttamente per %1$s elementi.</string>
     <string name="adoption_error_invalid">Controlla le cartelle del telefono e dello Storage Box. Le cartelle non possono sovrapporsi.</string>
+    <string name="remote_folder_name_invalid">Usa un solo nome di cartella senza barre.</string>
     <string name="adoption_error_permission">Consenti l’accesso alle cartelle prima di controllare il backup.</string>
     <string name="adoption_error_preview">Impossibile controllare in sicurezza il backup esistente. Non è stato caricato nulla.</string>
     <string name="adoption_error_changed">La configurazione delle cartelle è cambiata. Controlla di nuovo il backup esistente.</string>
@@ -144,4 +157,7 @@
     <string name="backup_notification_title">PiffBackup sta salvando i tuoi file</string>
     <string name="notification_permission_needed">Consenti le notifiche di backup per vedere l’avanzamento e usare Pausa mentre l’app è in background.</string>
     <string name="backup_could_not_start">Impossibile avviare il backup in background. Il lavoro in attesa è al sicuro; tocca Riprendi per riprovare.</string>
+    <string name="transfer_activity">File in caricamento</string>
+    <string name="transfer_waiting">In attesa del primo file…</string>
+    <string name="transfer_log_entry_format">↑ %1$s</string>
 </resources>

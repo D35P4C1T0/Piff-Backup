@@ -35,8 +35,8 @@ class InitialFileListPlannerTest {
         val result = planner.plan(
             MediaStoreSnapshot("external_primary", "v1", 5L),
             listOf(
-                entity("camera", camera, "Matteo/Camera", MappingModeValue.MEDIA_FAST),
-                entity("documents", documents, "Matteo/Documents", MappingModeValue.ALL_FILES),
+                entity("camera", camera, "Backups/Camera", MappingModeValue.MEDIA_FAST),
+                entity("documents", documents, "Backups/Documents", MappingModeValue.ALL_FILES),
             ),
         )
 

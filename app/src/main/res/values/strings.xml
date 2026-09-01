@@ -3,6 +3,8 @@
     <string name="welcome_description">Back up your photos and videos to your private Storage Box.</string>
     <string name="set_up_backup">Set up backup</string>
     <string name="back_up_now">Back up now</string>
+    <string name="backup_status">Backup status</string>
+    <string name="manage_backup">Manage backup</string>
     <string name="home_up_to_date_detail">Run a check whenever you have new photos, videos, or files.</string>
     <string name="looking_for_new_media">Looking for new photos and videos…</string>
     <string name="discovery_safe_detail">Checking the selected folders without deleting anything.</string>
@@ -14,6 +16,9 @@
     <string name="backup_paused_detail">Your progress is safe. Resume when you are ready.</string>
     <string name="needs_attention">Needs attention</string>
     <string name="needs_attention_detail">Check the folders and run the backup again.</string>
+    <string name="no_folders_detail">Choose at least one phone folder to include in your backup.</string>
+    <string name="choose_folders">Choose folders</string>
+    <string name="try_again">Try again</string>
     <string name="resume_backup">Resume</string>
     <string name="pause_backup">Pause</string>
     <string name="last_backup_format">Last successful backup: %1$s</string>
@@ -25,12 +30,18 @@
     </plurals>
     <string name="folders">Folders</string>
     <string name="settings">Settings</string>
+    <string name="backup_behavior">Backup behavior</string>
+    <string name="reliability">Reliability</string>
+    <string name="storage_box">Storage Box</string>
     <string name="back_to_home">Back to home</string>
     <string name="back">Back</string>
     <string name="connect_storage_box">Connect Storage Box</string>
     <string name="connect_explanation">Enter your Storage Box password once. PiffBackup will install a dedicated key, erase the password without saving it, then let you choose the backup folder.</string>
     <string name="storage_box_username">Username</string>
     <string name="storage_box_password">Password</string>
+    <string name="username_required">Enter your Storage Box username.</string>
+    <string name="password_required">Enter your Storage Box password.</string>
+    <string name="server_address_required">Enter the server address.</string>
     <string name="remote_base_path">Backup folder</string>
     <string name="remote_base_path_help">Existing top-level folder, using letters, numbers, dot, underscore, or hyphen</string>
     <string name="use_different_server">Use a different server address</string>
@@ -49,10 +60,7 @@
     <string name="use_storage_box_folder_format">Use %1$s/</string>
     <string name="retry_folder_list">Retry</string>
     <string name="open_hetzner_console">Open Hetzner Console</string>
-    <string name="storage_box_connected">Storage Box connected</string>
-    <string name="connected_summary">Dedicated key verified for %1$s. Existing backup folder %2$s was found without changing it.</string>
     <string name="server_fingerprint_label">Server fingerprint</string>
-    <string name="fingerprint_help">PiffBackup will stop if this server identity changes. You can compare it with the fingerprint shown by Hetzner.</string>
     <string name="fingerprint_unavailable">Fingerprint unavailable</string>
     <string name="settings_connection_summary">Connected to %1$s\nBackup folder: %2$s</string>
     <string name="automatic_upload_after_discovery">Start uploading automatically after discovery</string>
@@ -75,6 +83,7 @@
     <string name="error_destination_missing">Connected securely, but the selected backup folder was not found. Nothing was created or changed.</string>
     <string name="error_secure_storage">The protected connection could not be saved on this device. No backup was started.</string>
     <string name="choose_backup_folders">Choose backup folders</string>
+    <string name="folder_screen_connection_summary">%1$s · Backup folder %2$s</string>
     <string name="all_files_access_explanation">PiffBackup needs access to files you choose so its backup tool can read them directly. It cannot open other apps’ private data.</string>
     <string name="storage_access_granted">Folder access is ready</string>
     <string name="storage_access_missing">Folder access is required before continuing</string>
@@ -83,6 +92,9 @@
     <string name="folder_setup_details">About folder access</string>
     <string name="no_folders_configured">No folders selected yet.</string>
     <string name="add_local_folder">Add a folder</string>
+    <string name="phone_folder">Phone folder</string>
+    <string name="storage_box_destination">Storage Box destination</string>
+    <string name="files_included">Files included</string>
     <string name="clear_selected_folders">Clear selected folders</string>
     <string name="remove_folder_format">Remove %1$s</string>
     <string name="selected_local_folder_format">Phone folder: %1$s</string>
@@ -136,7 +148,11 @@
     <string name="backup_notification_title">PiffBackup is backing up your files</string>
     <string name="notification_permission_needed">Allow backup notifications so progress and Pause remain available while the app is in the background.</string>
     <string name="backup_could_not_start">The background backup could not start. Your pending work is safe; tap Resume to retry.</string>
+    <string name="transfer_activity">Files being uploaded</string>
+    <string name="transfer_waiting">Waiting for the first file…</string>
+    <string name="transfer_log_entry_format">↑ %1$s</string>
     <string name="adoption_error_invalid">Check the selected phone and Storage Box folders. Folders cannot overlap.</string>
+    <string name="remote_folder_name_invalid">Use a single folder name without slashes.</string>
     <string name="adoption_error_permission">Allow folder access before checking the backup.</string>
     <string name="adoption_error_preview">The existing backup could not be checked safely. Nothing was uploaded.</string>
     <string name="adoption_error_changed">The folder setup changed. Check the existing backup again.</string>

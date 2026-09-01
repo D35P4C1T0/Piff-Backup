@@ -81,7 +81,7 @@ class RsyncCommandBuilder(
             "--itemize-changes",
             "--stats",
             "--outbuf=L",
-            "--out-format=$ITEM_RECORD_PREFIX%i:%l",
+            "--out-format=$ITEM_RECORD_FORMAT",
             "--timeout=$IO_TIMEOUT_SECONDS",
             "--rsh=${StrictSshCommand.rsyncRemoteShell(sshExecutable, ssh)}",
             "--info=progress2",
@@ -117,7 +117,7 @@ class RsyncCommandBuilder(
             "--itemize-changes",
             "--stats",
             "--outbuf=L",
-            "--out-format=$ITEM_RECORD_PREFIX%i:%l",
+            "--out-format=$ITEM_RECORD_FORMAT",
             "--timeout=$IO_TIMEOUT_SECONDS",
             "--rsh=${StrictSshCommand.rsyncRemoteShell(sshExecutable, ssh)}",
         )
@@ -155,6 +155,7 @@ class RsyncCommandBuilder(
 
     companion object {
         const val ITEM_RECORD_PREFIX = "PIFFBACKUP-ITEM:"
+        const val ITEM_RECORD_FORMAT = "$ITEM_RECORD_PREFIX%i:%l:%n"
         private const val IO_TIMEOUT_SECONDS = 60
     }
 }

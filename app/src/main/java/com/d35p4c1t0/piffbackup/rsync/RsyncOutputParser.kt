@@ -8,7 +8,7 @@ data class AdoptionPreviewSummary(
 
 object RsyncOutputParser {
     private val itemRecord = Regex(
-        "^${Regex.escape(RsyncCommandBuilder.ITEM_RECORD_PREFIX)}(.{11}):([0-9]+)\\r?$",
+        "^${Regex.escape(RsyncCommandBuilder.ITEM_RECORD_PREFIX)}(.{11}):([0-9]+):(.*)\\r?$",
     )
     private val progressRecord = Regex(
         "^\\s*([0-9][0-9,]*)\\s+([0-9]{1,3})%\\s+.*$",
@@ -40,16 +40,23 @@ object RsyncOutputParser {
         if (itemizedChange[1] != 'f') return null
         val length = match.groupValues[2].toLongOrNull()
             ?: throw IllegalArgumentException("Invalid rsync item length")
+        val fileName = match.groupValues[3]
+        require(fileName.isNotEmpty()) { "Missing rsync item name" }
         return AdoptionItemRecord(
             requiresUpload = itemizedChange[0] == '<' || itemizedChange[0] == '>',
             length = length,
+            fileName = fileName,
         )
     }
+
+    internal fun parseTransferFileName(record: String): String? =
+        parseAdoptionItemRecord(record)?.takeIf { it.requiresUpload }?.fileName
 }
 
 internal data class AdoptionItemRecord(
     val requiresUpload: Boolean,
     val length: Long,
+    val fileName: String,
 )
 
 internal class AdoptionPreviewTracker {

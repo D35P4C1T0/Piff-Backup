@@ -49,7 +49,7 @@ class NativePackagingInstrumentedTest {
                 "--dry-run",
                 "--itemize-changes",
                 "--itemize-changes",
-                "--out-format=${RsyncCommandBuilder.ITEM_RECORD_PREFIX}%i:%l",
+                "--out-format=${RsyncCommandBuilder.ITEM_RECORD_FORMAT}",
                 "--",
                 source.path + "/",
                 destination.path + "/",

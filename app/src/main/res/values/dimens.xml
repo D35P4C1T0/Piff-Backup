@@ -1,3 +1,6 @@
 <resources>
     <dimen name="adoption_touch_target">48dp</dimen>
+    <dimen name="screen_horizontal_margin">20dp</dimen>
+    <dimen name="screen_vertical_margin">16dp</dimen>
+    <dimen name="content_max_width">680dp</dimen>
 </resources>

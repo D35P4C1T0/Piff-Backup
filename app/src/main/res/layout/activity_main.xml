@@ -1,43 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/app_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <FrameLayout
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/main_scroll"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:padding="20dp">
+        android:clipToPadding="true"
+        android:fillViewport="true"
+        android:scrollbars="none">
 
         <LinearLayout
-            android:id="@+id/welcome_group"
+            android:id="@+id/screens_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:accessibilityPaneTitle="@string/app_name"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:paddingStart="@dimen/screen_horizontal_margin"
+            android:paddingTop="@dimen/screen_vertical_margin"
+            android:paddingEnd="@dimen/screen_horizontal_margin"
+            android:paddingBottom="@dimen/screen_vertical_margin">
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:accessibilityHeading="true"
-                android:text="@string/app_name"
-                android:textAppearance="?attr/textAppearanceHeadlineLarge" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="@string/welcome_description"
-                android:textAppearance="?attr/textAppearanceBodyLarge" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/start_setup_button"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="32dp"
-                android:minHeight="48dp"
-                android:text="@string/set_up_backup" />
-        </LinearLayout>
+        <include
+            android:id="@+id/welcome_group"
+            layout="@layout/view_welcome" />
 
         <include
             android:id="@+id/home_group"
@@ -55,12 +43,15 @@
             android:orientation="vertical"
             android:visibility="gone">
 
-            <TextView
+            <com.google.android.material.appbar.MaterialToolbar
+                android:id="@+id/connect_toolbar"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:accessibilityHeading="true"
-                android:text="@string/connect_storage_box"
-                android:textAppearance="?attr/textAppearanceHeadlineMedium" />
+                android:minHeight="56dp"
+                app:navigationContentDescription="@string/back"
+                app:navigationIcon="@drawable/ic_arrow_back"
+                app:title="@string/connect_storage_box"
+                app:titleTextAppearance="?attr/textAppearanceTitleLarge" />
 
             <TextView
                 android:layout_width="match_parent"
@@ -70,6 +61,7 @@
                 android:textAppearance="?attr/textAppearanceBodyMedium" />
 
             <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/username_layout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="24dp"
@@ -81,11 +73,13 @@
                     android:layout_height="wrap_content"
                     android:autofillHints="username"
                     android:inputType="textNoSuggestions"
+                    android:imeOptions="actionNext"
                     android:maxLength="64"
                     android:singleLine="true" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/password_layout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
@@ -99,6 +93,7 @@
                     android:autofillHints="password"
                     android:importantForAutofill="noExcludeDescendants"
                     android:inputType="textPassword"
+                    android:imeOptions="actionDone"
                     android:maxLength="1024"
                     android:saveEnabled="false"
                     android:singleLine="true" />
@@ -163,11 +158,11 @@
 
             <TextView
                 android:id="@+id/connect_error"
+                style="@style/PiffBackup.ErrorText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:accessibilityLiveRegion="assertive"
-                android:textAppearance="?attr/textAppearanceBodyMedium"
                 android:visibility="gone" />
 
             <com.google.android.material.button.MaterialButton
@@ -189,12 +184,15 @@
             android:orientation="vertical"
             android:visibility="gone">
 
-            <TextView
+            <com.google.android.material.appbar.MaterialToolbar
+                android:id="@+id/destination_toolbar"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:accessibilityHeading="true"
-                android:text="@string/choose_storage_box_folder"
-                android:textAppearance="?attr/textAppearanceHeadlineMedium" />
+                android:minHeight="56dp"
+                app:navigationContentDescription="@string/back"
+                app:navigationIcon="@drawable/ic_arrow_back"
+                app:title="@string/choose_storage_box_folder"
+                app:titleTextAppearance="?attr/textAppearanceTitleLarge" />
 
             <TextView
                 android:id="@+id/destination_connection_summary"
@@ -253,11 +251,11 @@
 
             <TextView
                 android:id="@+id/destination_error"
+                style="@style/PiffBackup.ErrorText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:accessibilityLiveRegion="assertive"
-                android:textAppearance="?attr/textAppearanceBodyMedium"
                 android:visibility="gone" />
 
             <com.google.android.material.button.MaterialButton
@@ -281,72 +279,9 @@
         </LinearLayout>
 
         <LinearLayout
-            android:id="@+id/connected_group"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:accessibilityPaneTitle="@string/storage_box_connected"
-            android:orientation="vertical"
-            android:visibility="gone">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:accessibilityHeading="true"
-                android:text="@string/storage_box_connected"
-                android:textAppearance="?attr/textAppearanceHeadlineMedium" />
-
-            <TextView
-                android:id="@+id/connected_summary"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:textAppearance="?attr/textAppearanceBodyLarge" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                android:text="@string/server_fingerprint_label"
-                android:textAppearance="?attr/textAppearanceLabelLarge" />
-
-            <TextView
-                android:id="@+id/server_fingerprint"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:fontFamily="monospace"
-                android:textIsSelectable="true"
-                android:textAppearance="?attr/textAppearanceBodySmall" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="@string/fingerprint_help"
-                android:textAppearance="?attr/textAppearanceBodySmall" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/choose_folders_button"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                android:minHeight="48dp"
-                android:text="@string/choose_backup_folders" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/reconnect_button"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:minHeight="48dp"
-                android:text="@string/change_connection" />
-        </LinearLayout>
-
-        <LinearLayout
             android:id="@+id/adoption_mapping_group"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
             android:accessibilityPaneTitle="@string/choose_backup_folders"
             android:orientation="vertical"
             android:visibility="gone">
@@ -361,41 +296,17 @@
                 app:title="@string/folders"
                 app:titleTextAppearance="?attr/textAppearanceTitleLarge" />
 
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/storage_access_card"
+            <TextView
+                android:id="@+id/folders_connection_summary"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                app:cardBackgroundColor="?attr/colorSecondaryContainer"
-                app:cardElevation="0dp">
+                android:textAppearance="?attr/textAppearanceBodySmall"
+                android:textColor="?attr/colorOnSurfaceVariant" />
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingStart="16dp"
-                    android:paddingTop="8dp"
-                    android:paddingEnd="8dp"
-                    android:paddingBottom="8dp">
-
-                    <TextView
-                        android:id="@+id/storage_access_status"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:accessibilityLiveRegion="polite"
-                        android:textAppearance="?attr/textAppearanceBodyMedium" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/grant_storage_access_button"
-                        style="@style/Widget.Material3.Button.TextButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:minHeight="48dp"
-                        android:text="@string/grant_folder_access_compact" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
+            <include
+                android:id="@+id/storage_access_panel"
+                layout="@layout/view_storage_access" />
 
             <TextView
                 android:id="@+id/configured_mappings"
@@ -447,18 +358,13 @@
                     android:visibility="gone" />
             </LinearLayout>
 
-            <Space
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1" />
-
             <TextView
                 android:id="@+id/adoption_error"
+                style="@style/PiffBackup.ErrorText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:accessibilityLiveRegion="assertive"
-                android:textAppearance="?attr/textAppearanceBodyMedium"
                 android:visibility="gone" />
 
             <com.google.android.material.progressindicator.LinearProgressIndicator
@@ -492,7 +398,7 @@
         <LinearLayout
             android:id="@+id/mapping_editor_group"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
             android:accessibilityPaneTitle="@string/add_local_folder"
             android:orientation="vertical"
             android:visibility="gone">
@@ -506,6 +412,11 @@
                 app:navigationContentDescription="@string/back"
                 app:title="@string/add_local_folder"
                 app:titleTextAppearance="?attr/textAppearanceTitleLarge" />
+
+            <TextView
+                style="@style/PiffBackup.SectionLabel"
+                android:layout_marginTop="16dp"
+                android:text="@string/phone_folder" />
 
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
@@ -523,10 +434,15 @@
             </com.google.android.material.card.MaterialCardView>
 
             <TextView
+                style="@style/PiffBackup.SectionLabel"
+                android:layout_marginTop="28dp"
+                android:text="@string/storage_box_destination" />
+
+            <TextView
                 android:id="@+id/remote_browser_path"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
+                android:layout_marginTop="8dp"
                 android:textAppearance="?attr/textAppearanceLabelLarge" />
 
             <TextView
@@ -536,6 +452,15 @@
                 android:layout_marginTop="4dp"
                 android:accessibilityLiveRegion="polite"
                 android:textAppearance="?attr/textAppearanceBodySmall" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/retry_remote_list_button"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:text="@string/retry_folder_list"
+                android:visibility="gone" />
 
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/remote_directory_layout"
@@ -598,6 +523,7 @@
                 android:visibility="gone">
 
                 <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/new_remote_folder_layout"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -628,6 +554,11 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:visibility="gone" />
+
+            <TextView
+                style="@style/PiffBackup.SectionLabel"
+                android:layout_marginTop="28dp"
+                android:text="@string/files_included" />
 
             <com.google.android.material.button.MaterialButtonToggleGroup
                 android:id="@+id/mapping_mode_group"
@@ -675,127 +606,28 @@
                 android:textAppearance="?attr/textAppearanceBodySmall"
                 android:visibility="gone" />
 
-            <Space
+            <TextView
+                android:id="@+id/mapping_editor_error"
+                style="@style/PiffBackup.ErrorText"
                 android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1" />
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:accessibilityLiveRegion="assertive"
+                android:visibility="gone" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/save_mapping_button"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
                 android:minHeight="52dp"
                 android:text="@string/add_this_mapping" />
         </LinearLayout>
 
-        <LinearLayout
-            android:id="@+id/adoption_preview_group"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:accessibilityPaneTitle="@string/existing_backup_checked"
-            android:orientation="vertical"
-            android:visibility="gone">
+        <include
+            android:id="@+id/adoption_flow"
+            layout="@layout/view_adoption_flow" />
 
-            <TextView
-                android:id="@+id/adoption_preview_title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:accessibilityHeading="true"
-                android:text="@string/existing_backup_checked"
-                android:textAppearance="?attr/textAppearanceHeadlineMedium" />
-
-            <TextView
-                android:id="@+id/adoption_summary"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:textAppearance="?attr/textAppearanceBodyLarge" />
-
-            <TextView
-                android:id="@+id/adoption_preview_error"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:accessibilityLiveRegion="assertive"
-                android:textAppearance="?attr/textAppearanceBodyMedium"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/preview_explanation"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="@string/no_backup_started_yet"
-                android:textAppearance="?attr/textAppearanceBodyMedium" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/start_adoption_button"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                android:minHeight="48dp"
-                android:text="@string/start_backup" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/change_mappings_button"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:minHeight="48dp"
-                android:text="@string/change_folders" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/preview_back_home_button"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:minHeight="48dp"
-                android:text="@string/back_to_home"
-                android:visibility="gone" />
         </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/adoption_transfer_group"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:accessibilityPaneTitle="@string/backing_up"
-            android:orientation="vertical"
-            android:visibility="gone">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:accessibilityHeading="true"
-                android:text="@string/backing_up"
-                android:textAppearance="?attr/textAppearanceHeadlineMedium" />
-
-            <com.google.android.material.progressindicator.LinearProgressIndicator
-                android:id="@+id/adoption_transfer_progress"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                android:importantForAccessibility="no"
-                android:max="100" />
-
-            <TextView
-                android:id="@+id/adoption_transfer_status"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:accessibilityLiveRegion="polite"
-                android:textAppearance="?attr/textAppearanceBodyLarge" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/cancel_adoption_button"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                android:minHeight="48dp"
-                android:text="@string/cancel_backup" />
-        </LinearLayout>
-
-    </FrameLayout>
+    </androidx.core.widget.NestedScrollView>
 </FrameLayout>

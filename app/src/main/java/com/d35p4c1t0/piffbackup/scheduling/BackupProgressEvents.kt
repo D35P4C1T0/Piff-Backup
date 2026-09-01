@@ -13,6 +13,7 @@ data class BackupProgressEvent(
     val jobId: String,
     val status: BackupProgressStatus,
     val percentage: Int,
+    val fileName: String? = null,
 )
 
 object BackupProgressEvents {

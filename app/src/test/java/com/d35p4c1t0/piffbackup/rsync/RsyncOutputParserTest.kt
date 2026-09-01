@@ -8,11 +8,11 @@ class RsyncOutputParserTest {
     @Test
     fun `preview counts regular files without parsing filenames`() {
         val output = """
-            PIFFBACKUP-ITEM:.f         :50
-            PIFFBACKUP-ITEM:<f+++++++++:123
+            PIFFBACKUP-ITEM:.f         :50:already-there.jpg
+            PIFFBACKUP-ITEM:<f+++++++++:123:new photo.jpg
             a filename fragment that resembles output
-            PIFFBACKUP-ITEM:cd+++++++++:4096
-            PIFFBACKUP-ITEM:>f.s.......:456
+            PIFFBACKUP-ITEM:cd+++++++++:4096:Camera/
+            PIFFBACKUP-ITEM:>f.s.......:456:edited.jpg
             Number of regular files transferred: 2
         """.trimIndent()
 
@@ -27,12 +27,12 @@ class RsyncOutputParserTest {
     }
 
     @Test
-    fun `preview ignores malformed and filename-injected records`() {
+    fun `preview ignores malformed records`() {
         val output = """
-            PIFFBACKUP-ITEM:<f+++++++++:12:filename
+            PIFFBACKUP-ITEM:<f+++++++++:12
             file name
-            PIFFBACKUP-ITEM:<f+++++++++:not-a-number
-            PIFFBACKUP-ITEM:*deleting  :999
+            PIFFBACKUP-ITEM:<f+++++++++:not-a-number:file.jpg
+            PIFFBACKUP-ITEM:*deleting  :999:deleted.jpg
         """.trimIndent()
 
         assertEquals(AdoptionPreviewSummary(0L, 0L, 0L), RsyncOutputParser.parseAdoptionPreview(output))
@@ -41,13 +41,29 @@ class RsyncOutputParserTest {
     @Test
     fun `preview rejects byte overflow`() {
         val output = """
-            PIFFBACKUP-ITEM:<f+++++++++:${Long.MAX_VALUE}
-            PIFFBACKUP-ITEM:<f+++++++++:1
+            PIFFBACKUP-ITEM:<f+++++++++:${Long.MAX_VALUE}:huge.bin
+            PIFFBACKUP-ITEM:<f+++++++++:1:one-more.bin
         """.trimIndent()
 
         assertThrows(IllegalArgumentException::class.java) {
             RsyncOutputParser.parseAdoptionPreview(output)
         }
+    }
+
+    @Test
+    fun `transfer parser keeps relative names and escaped control characters`() {
+        assertEquals(
+            "Camera/line\\#012break.jpg",
+            RsyncOutputParser.parseTransferFileName(
+                "PIFFBACKUP-ITEM:<f+++++++++:12:Camera/line\\#012break.jpg",
+            ),
+        )
+        assertEquals(
+            null,
+            RsyncOutputParser.parseTransferFileName(
+                "PIFFBACKUP-ITEM:.f         :12:Camera/already-there.jpg",
+            ),
+        )
     }
 
     @Test

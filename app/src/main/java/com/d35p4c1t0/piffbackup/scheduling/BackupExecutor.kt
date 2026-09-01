@@ -101,18 +101,37 @@ class BackupExecutor(
                     val runningJob = runBlocking { durableBackup.markRootRunning(jobId, root.folderMappingId) }
                     val command = command(profile.remoteBasePath, root, ssh, reconciliation)
                     var transferredBytes = root.completedBytes
-                    val process = engine.start(command, ssh.sshHomeDirectory) { progress ->
-                        transferredBytes = progress.transferredBytes.coerceIn(0L, root.totalBytes)
-                        val percentage = aggregatePercentage(
-                            totalBytes = runningJob.job.totalBytes,
-                            completedRootBytes = runningJob.roots
-                                .filter { it.status == PendingRootStatusValue.SUCCEEDED }
-                                .sumOf { it.totalBytes },
-                            currentRootBytes = transferredBytes,
-                            fallback = progress.percentage,
-                        )
-                        publish(jobId, BackupProgressStatus.RUNNING, percentage, reporter)
-                    }
+                    val completedRootBytes = runningJob.roots
+                        .filter { it.status == PendingRootStatusValue.SUCCEEDED }
+                        .sumOf { it.totalBytes }
+                    fun currentPercentage(fallback: Int) = aggregatePercentage(
+                        totalBytes = runningJob.job.totalBytes,
+                        completedRootBytes = completedRootBytes,
+                        currentRootBytes = transferredBytes,
+                        fallback = fallback,
+                    )
+                    val process = engine.start(
+                        command = command,
+                        workingDirectory = ssh.sshHomeDirectory,
+                        onProgress = { progress ->
+                            transferredBytes = progress.transferredBytes.coerceIn(0L, root.totalBytes)
+                            publish(
+                                jobId,
+                                BackupProgressStatus.RUNNING,
+                                currentPercentage(progress.percentage),
+                                reporter,
+                            )
+                        },
+                        onFile = { fileName ->
+                            publish(
+                                jobId,
+                                BackupProgressStatus.RUNNING,
+                                currentPercentage(0),
+                                reporter,
+                                fileName,
+                            )
+                        },
+                    )
                     running.set(process)
                     val result = try {
                         process.await()
@@ -227,8 +246,9 @@ class BackupExecutor(
         status: BackupProgressStatus,
         percentage: Int,
         reporter: BackupExecutionReporter,
+        fileName: String? = null,
     ) {
-        val event = BackupProgressEvent(jobId, status, percentage.coerceIn(0, 100))
+        val event = BackupProgressEvent(jobId, status, percentage.coerceIn(0, 100), fileName)
         BackupProgressEvents.publish(event)
         reporter.report(event)
     }

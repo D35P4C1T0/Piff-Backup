@@ -36,7 +36,7 @@ class HetznerOnboardingCoordinatorTest {
         assertTrue(fixture.profiles.saved.single().setupCompleted)
         assertEquals("keystore:v1:primary", fixture.profiles.saved.single().encryptedCredentialRef)
         assertEquals(PIN.persistedValue, fixture.profiles.saved.single().pinnedHostKey)
-        assertEquals("Matteo", fixture.profiles.saved.single().remoteBasePath)
+        assertEquals("Backups", fixture.profiles.saved.single().remoteBasePath)
         assertEquals(TEST_REMOTE_BASE.value, fixture.verifier.remoteBasePath?.value)
         assertTrue(OnboardingProgress.VERIFYING_DESTINATION in fixture.progress)
         assertEquals(null, fixture.coordinator.pendingConnection())
@@ -190,7 +190,7 @@ class HetznerOnboardingCoordinatorTest {
 
     private companion object {
         val ENDPOINT = StorageBoxEndpoint("u123456", "u123456.your-storagebox.de")
-        val TEST_REMOTE_BASE = RemoteRelativePath.create("Matteo")
+        val TEST_REMOTE_BASE = RemoteRelativePath.create("Backups")
         val PIN = HostKeyPin.parse("ssh-ed25519 AQID")
         val WORK_DIRECTORY: File = File(requireNotNull(System.getProperty("java.io.tmpdir")))
         val WORK_KEY: File = Files.createTempFile("piffbackup-fake-key", ".tmp").toFile()

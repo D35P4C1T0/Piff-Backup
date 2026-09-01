@@ -17,7 +17,7 @@ class RsyncCommandBuilderTest {
     private val shared = Files.createTempDirectory("piffbackup-command").toFile()
     private val mapping = BackupMapping(
         localRoot = CanonicalLocalRoot.create(File(shared, "Camera").apply { mkdirs() }.path, shared),
-        remoteRoot = RemoteRelativePath.create("Matteo/Family's album 😄"),
+        remoteRoot = RemoteRelativePath.create("Backups/Family's album 😄"),
     )
     private val ssh = StrictSshConfig(
         username = "u123456",
@@ -29,7 +29,7 @@ class RsyncCommandBuilderTest {
     private val builder = RsyncCommandBuilder(
         rsyncExecutable = File("/data/app/pkg/lib/arm64/libpiffbackup_rsync.so"),
         sshExecutable = File("/data/app/pkg/lib/arm64/libpiffbackup_dbclient.so"),
-        remoteBasePath = RemoteRelativePath.create("Matteo"),
+        remoteBasePath = RemoteRelativePath.create("Backups"),
     )
 
     @Test
@@ -46,7 +46,7 @@ class RsyncCommandBuilderTest {
         assertFalse("--compress" in command.arguments || "-z" in command.arguments)
         assertEquals(mapping.localRoot.pathWithTrailingSlash, command.arguments[command.arguments.lastIndex - 1])
         assertEquals(
-            "u123456@u123456.your-storagebox.de:Matteo/Family's album 😄/",
+            "u123456@u123456.your-storagebox.de:Backups/Family's album 😄/",
             command.arguments.last(),
         )
         assertEquals("C", command.environment["LC_ALL"])

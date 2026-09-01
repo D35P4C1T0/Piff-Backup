@@ -42,12 +42,12 @@ class OnboardingModelsTest {
 
     @Test
     fun `selected backup folder must be a safe top level root`() {
-        requireValidStorageBoxBackupRoot(RemoteRelativePath.create("Matteo/"))
+        requireValidStorageBoxBackupRoot(RemoteRelativePath.create("Backups/"))
         assertThrows(IllegalArgumentException::class.java) {
             requireValidStorageBoxBackupRoot(RemoteRelativePath.create("parent/child"))
         }
         assertThrows(IllegalArgumentException::class.java) {
-            requireValidStorageBoxBackupRoot(RemoteRelativePath.create("Matteo;touch"))
+            requireValidStorageBoxBackupRoot(RemoteRelativePath.create("Backups;touch"))
         }
     }
 }

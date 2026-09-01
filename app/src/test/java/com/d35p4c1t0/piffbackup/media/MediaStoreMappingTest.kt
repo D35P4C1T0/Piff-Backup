@@ -15,7 +15,7 @@ class MediaStoreMappingTest {
     private val mapping = MediaStoreMapping.create(
         BackupMapping(
             CanonicalLocalRoot.create(File(volume, "DCIM/Camera").path, volume),
-            RemoteRelativePath.create("Matteo/Camera"),
+            RemoteRelativePath.create("Backups/Camera"),
         ),
         volume,
     )
@@ -51,7 +51,7 @@ class MediaStoreMappingTest {
         val outside = Files.createTempDirectory("piffbackup-outside-volume").toFile()
         val backupMapping = BackupMapping(
             CanonicalLocalRoot.create(File(outside, "DCIM").path, outside),
-            RemoteRelativePath.create("Matteo/Outside"),
+            RemoteRelativePath.create("Backups/Outside"),
         )
 
         assertThrows(IllegalArgumentException::class.java) {

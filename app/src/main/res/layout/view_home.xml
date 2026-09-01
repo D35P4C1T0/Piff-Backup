@@ -7,19 +7,25 @@
     android:orientation="vertical"
     android:visibility="gone">
 
-    <TextView
+    <com.google.android.material.appbar.MaterialToolbar
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:accessibilityHeading="true"
-        android:text="@string/app_name"
-        android:textAppearance="?attr/textAppearanceHeadlineLarge" />
+        android:minHeight="56dp"
+        app:title="@string/app_name"
+        app:titleTextAppearance="?attr/textAppearanceHeadlineSmall" />
+
+    <TextView
+        style="@style/PiffBackup.SectionLabel"
+        android:layout_marginTop="16dp"
+        android:text="@string/backup_status" />
 
     <com.google.android.material.card.MaterialCardView
+        android:id="@+id/home_status_card"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        app:cardElevation="0dp"
-        app:strokeWidth="1dp">
+        android:layout_marginTop="8dp"
+        app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
+        app:cardElevation="0dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -27,21 +33,61 @@
             android:orientation="vertical"
             android:padding="20dp">
 
-            <TextView
-                android:id="@+id/home_status_title"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:accessibilityHeading="true"
-                android:accessibilityLiveRegion="polite"
-                android:textAppearance="?attr/textAppearanceHeadlineSmall" />
+                android:gravity="top"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/home_status_icon"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_cloud_done"
+                    app:tint="?attr/colorPrimary" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/home_status_title"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:accessibilityHeading="true"
+                        android:accessibilityLiveRegion="polite"
+                        android:textAppearance="?attr/textAppearanceTitleLarge" />
+
+                    <TextView
+                        android:id="@+id/home_status_detail"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:accessibilityLiveRegion="polite"
+                        android:textAppearance="?attr/textAppearanceBodyLarge" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <com.google.android.material.progressindicator.LinearProgressIndicator
+                android:id="@+id/home_progress"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:importantForAccessibility="no"
+                android:max="100"
+                android:visibility="gone" />
 
             <TextView
-                android:id="@+id/home_status_detail"
+                android:id="@+id/home_last_backup"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:accessibilityLiveRegion="polite"
-                android:textAppearance="?attr/textAppearanceBodyLarge" />
+                android:layout_marginTop="16dp"
+                android:textAppearance="?attr/textAppearanceBodySmall"
+                android:textColor="?attr/colorOnSurfaceVariant" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
@@ -49,34 +95,87 @@
         android:id="@+id/home_backup_button"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="20dp"
-        android:minHeight="56dp"
-        android:text="@string/back_up_now" />
-
-    <TextView
-        android:id="@+id/home_last_backup"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:textAppearance="?attr/textAppearanceBodySmall" />
-
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/home_folders_button"
-        style="?attr/materialButtonOutlinedStyle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:gravity="start|center_vertical"
         android:minHeight="56dp"
-        android:text="@string/folders" />
+        android:text="@string/back_up_now"
+        app:icon="@drawable/ic_backup"
+        app:iconGravity="textStart" />
 
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/home_settings_button"
-        style="?attr/materialButtonOutlinedStyle"
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/home_transfer_log_card"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
+        android:visibility="gone"
+        app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
+        app:cardElevation="0dp"
+        app:strokeColor="?attr/colorOutlineVariant"
+        app:strokeWidth="1dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/home_transfer_log_toggle"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="start|center_vertical"
+                android:minHeight="48dp"
+                android:text="@string/transfer_activity"
+                app:icon="@drawable/ic_expand_more"
+                app:iconGravity="textEnd" />
+
+            <TextView
+                android:id="@+id/home_transfer_log_entries"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="16dp"
+                android:accessibilityLiveRegion="polite"
+                android:fontFamily="monospace"
+                android:maxLines="6"
+                android:text="@string/transfer_waiting"
+                android:textAppearance="?attr/textAppearanceBodySmall"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:visibility="gone" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <TextView
+        style="@style/PiffBackup.SectionLabel"
+        android:layout_marginTop="32dp"
+        android:text="@string/manage_backup" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/home_folders_button"
+        style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:gravity="start|center_vertical"
         android:minHeight="56dp"
-        android:text="@string/settings" />
+        android:text="@string/folders"
+        app:icon="@drawable/ic_folder"
+        app:iconGravity="textStart"
+        app:iconPadding="16dp" />
+
+    <com.google.android.material.divider.MaterialDivider
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="56dp" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/home_settings_button"
+        style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="start|center_vertical"
+        android:minHeight="56dp"
+        android:text="@string/settings"
+        app:icon="@drawable/ic_settings"
+        app:iconGravity="textStart"
+        app:iconPadding="16dp" />
 </LinearLayout>

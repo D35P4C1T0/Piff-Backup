@@ -1,0 +1,207 @@
+name: Android CI and release
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  JAVA_VERSION: "17"
+
+jobs:
+  verify:
+    name: Build and verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: >-
+            tools
+            platform-tools
+            platforms;android-37
+            build-tools;36.0.0
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+
+      - name: Test, lint, and build
+        run: >-
+          ./gradlew --no-daemon
+          testDebugUnitTest
+          lintDebug
+          assembleDebug
+          compileDebugAndroidTestKotlin
+          assembleRelease
+
+      - name: Upload CI APKs
+        uses: actions/upload-artifact@v7
+        with:
+          name: piffbackup-${{ github.sha }}
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish tagged release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v6
+
+      - name: Validate tag and derive Android version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "Release tags must use vMAJOR.MINOR.PATCH, for example v1.2.3." >&2
+            exit 1
+          fi
+
+          major="${BASH_REMATCH[1]}"
+          minor="${BASH_REMATCH[2]}"
+          patch="${BASH_REMATCH[3]}"
+          if (( 10#$minor > 999 || 10#$patch > 999 )); then
+            echo "Minor and patch versions must be between 0 and 999." >&2
+            exit 1
+          fi
+
+          version_code=$((10#$major * 1000000 + 10#$minor * 1000 + 10#$patch))
+          if (( version_code < 1 || version_code > 2100000000 )); then
+            echo "The derived Android version code is outside the valid range." >&2
+            exit 1
+          fi
+
+          echo "PIFFBACKUP_VERSION_NAME=$version" >> "$GITHUB_ENV"
+          echo "PIFFBACKUP_VERSION_CODE=$version_code" >> "$GITHUB_ENV"
+
+      - name: Require signing secrets
+        shell: bash
+        env:
+          PIFFBACKUP_KEYSTORE_BASE64: ${{ secrets.PIFFBACKUP_KEYSTORE_BASE64 }}
+          PIFFBACKUP_KEYSTORE_PASSWORD: ${{ secrets.PIFFBACKUP_KEYSTORE_PASSWORD }}
+          PIFFBACKUP_KEY_ALIAS: ${{ secrets.PIFFBACKUP_KEY_ALIAS }}
+          PIFFBACKUP_KEY_PASSWORD: ${{ secrets.PIFFBACKUP_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${PIFFBACKUP_KEYSTORE_BASE64:?Missing PIFFBACKUP_KEYSTORE_BASE64 repository secret}"
+          : "${PIFFBACKUP_KEYSTORE_PASSWORD:?Missing PIFFBACKUP_KEYSTORE_PASSWORD repository secret}"
+          : "${PIFFBACKUP_KEY_ALIAS:?Missing PIFFBACKUP_KEY_ALIAS repository secret}"
+          : "${PIFFBACKUP_KEY_PASSWORD:?Missing PIFFBACKUP_KEY_PASSWORD repository secret}"
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: >-
+            tools
+            platform-tools
+            platforms;android-37
+            build-tools;36.0.0
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+          cache-read-only: true
+
+      - name: Decode release keystore
+        shell: bash
+        env:
+          PIFFBACKUP_KEYSTORE_BASE64: ${{ secrets.PIFFBACKUP_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$PIFFBACKUP_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/piffbackup-release.jks"
+          chmod 600 "$RUNNER_TEMP/piffbackup-release.jks"
+
+      - name: Build release APK
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: Sign and verify APK
+        shell: bash
+        env:
+          PIFFBACKUP_KEYSTORE_PASSWORD: ${{ secrets.PIFFBACKUP_KEYSTORE_PASSWORD }}
+          PIFFBACKUP_KEY_ALIAS: ${{ secrets.PIFFBACKUP_KEY_ALIAS }}
+          PIFFBACKUP_KEY_PASSWORD: ${{ secrets.PIFFBACKUP_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          unsigned_apk="app/build/outputs/apk/release/app-release-unsigned.apk"
+          release_dir="release"
+          release_name="PiffBackup-${PIFFBACKUP_VERSION_NAME}-arm64-v8a.apk"
+          apksigner_path="$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
+          mkdir -p "$release_dir"
+          test -x "$apksigner_path"
+
+          "$apksigner_path" sign \
+            --ks "$RUNNER_TEMP/piffbackup-release.jks" \
+            --ks-pass env:PIFFBACKUP_KEYSTORE_PASSWORD \
+            --ks-key-alias "$PIFFBACKUP_KEY_ALIAS" \
+            --key-pass env:PIFFBACKUP_KEY_PASSWORD \
+            --out "$release_dir/$release_name" \
+            "$unsigned_apk"
+
+          "$apksigner_path" verify --verbose --print-certs "$release_dir/$release_name"
+          (
+            cd "$release_dir"
+            sha256sum "$release_name" > "$release_name.sha256"
+          )
+
+      - name: Upload signed release artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: PiffBackup-${{ env.PIFFBACKUP_VERSION_NAME }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${GITHUB_REF_NAME}"
+          release/*
+          --verify-tag
+          --generate-notes
+          --title "PiffBackup ${PIFFBACKUP_VERSION_NAME}"
+
+      - name: Remove decoded keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/piffbackup-release.jks"

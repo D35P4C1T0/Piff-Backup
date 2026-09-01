@@ -1,5 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.PiffBackup" parent="Theme.Material3.DayNight.NoActionBar" />
+    <style name="Theme.PiffBackup" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:colorAccent">?attr/colorPrimary</item>
+        <item name="android:navigationBarColor">?attr/colorSurface</item>
+        <item name="android:statusBarColor">?attr/colorSurface</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
+    <style name="PiffBackup.SectionLabel" parent="TextAppearance.Material3.LabelLarge">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.08</item>
+    </style>
+
+    <style name="PiffBackup.ErrorText" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textColor">?attr/colorError</item>
+    </style>
 </resources>

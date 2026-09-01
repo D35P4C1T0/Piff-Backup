@@ -4,6 +4,17 @@ plugins {
     alias(libs.plugins.androidx.room3)
 }
 
+val buildVersionCode = providers.environmentVariable("PIFFBACKUP_VERSION_CODE")
+    .orElse("1")
+    .get()
+    .toInt()
+val buildVersionName = providers.environmentVariable("PIFFBACKUP_VERSION_NAME")
+    .orElse("1.0")
+    .get()
+
+require(buildVersionCode > 0) { "PIFFBACKUP_VERSION_CODE must be positive" }
+require(buildVersionName.isNotBlank()) { "PIFFBACKUP_VERSION_NAME must not be blank" }
+
 android {
     namespace = "com.d35p4c1t0.piffbackup"
     compileSdk {
@@ -14,8 +25,8 @@ android {
         applicationId = "com.d35p4c1t0.piffbackup"
         minSdk = 33
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = buildVersionCode
+        versionName = buildVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -39,7 +50,7 @@ android {
     }
     packaging {
         jniLibs {
-            // The Phase 1 executables must be extracted to nativeLibraryDir so
+            // The bundled executables must be extracted to nativeLibraryDir so
             // ProcessBuilder can execute them. This is intentionally APK-first.
             useLegacyPackaging = true
             keepDebugSymbols += setOf("**/libpiffbackup_*.so")

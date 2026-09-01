@@ -16,8 +16,14 @@ class RsyncCommandEngine(
         command: RsyncCommand,
         workingDirectory: File,
         onProgress: (RsyncProgress) -> Unit = {},
+        onFile: (String) -> Unit = {},
     ): RunningRsyncCommand {
         val progressTracker = RsyncProgressTracker(onProgress)
+        val fileTracker = if (command.outputKind == RsyncOutputKind.ADOPTION_PREVIEW) {
+            null
+        } else {
+            RsyncFileTracker(onFile)
+        }
         val previewTracker = if (command.outputKind == RsyncOutputKind.ADOPTION_PREVIEW) {
             AdoptionPreviewTracker()
         } else {
@@ -29,16 +35,18 @@ class RsyncCommandEngine(
             environment = command.environment,
             onStdoutChunk = { chunk ->
                 progressTracker.accept(chunk)
+                fileTracker?.accept(chunk)
                 previewTracker?.accept(chunk)
             },
         )
-        return RunningRsyncCommand(process, progressTracker, previewTracker)
+        return RunningRsyncCommand(process, progressTracker, fileTracker, previewTracker)
     }
 }
 
 class RunningRsyncCommand internal constructor(
     private val process: RunningNativeProcess,
     private val progressTracker: RsyncProgressTracker,
+    private val fileTracker: RsyncFileTracker?,
     private val previewTracker: AdoptionPreviewTracker?,
 ) {
     fun cancel() = process.cancel()
@@ -46,6 +54,7 @@ class RunningRsyncCommand internal constructor(
     fun await(): RsyncExecutionResult {
         val result = process.await()
         progressTracker.finish()
+        fileTracker?.finish()
         previewTracker?.finish()
         return RsyncExecutionResult(
             process = result,
@@ -53,6 +62,42 @@ class RunningRsyncCommand internal constructor(
             latestProgress = progressTracker.latest ?: RsyncOutputParser.parseLatestProgress(result.stdout),
             adoptionPreviewSummary = previewTracker?.summary(),
         )
+    }
+}
+
+internal class RsyncFileTracker(
+    private val observer: (String) -> Unit,
+) {
+    private val pending = StringBuilder()
+
+    @Synchronized
+    fun accept(chunk: String) {
+        for (character in chunk) {
+            if (character == '\r' || character == '\n') {
+                parsePending()
+            } else if (pending.length < MAX_RECORD_LENGTH) {
+                pending.append(character)
+            }
+        }
+    }
+
+    @Synchronized
+    fun finish() = parsePending()
+
+    private fun parsePending() {
+        if (pending.isEmpty()) return
+        val record = pending.toString()
+        pending.setLength(0)
+        val fileName = runCatching { RsyncOutputParser.parseTransferFileName(record) }.getOrNull() ?: return
+        try {
+            observer(fileName)
+        } catch (_: RuntimeException) {
+            // A UI observer must not stop draining the native process pipe.
+        }
+    }
+
+    private companion object {
+        const val MAX_RECORD_LENGTH = 8 * 1024
     }
 }
 
