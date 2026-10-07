@@ -146,16 +146,30 @@ class ImprovementInstrumentedTest {
         try {
             androidx.test.core.app.ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 fun view(id: Int) = androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withId(id))
+                fun reveal(id: Int) {
+                    scenario.onActivity { activity ->
+                        val scroll = activity.findViewById<androidx.core.widget.NestedScrollView>(R.id.main_scroll)
+                        val target = activity.findViewById<android.view.View>(id)
+                        val rect = android.graphics.Rect()
+                        target.getDrawingRect(rect)
+                        scroll.offsetDescendantRectToMyCoords(target, rect)
+                        scroll.scrollTo(0, rect.top - scroll.paddingTop)
+                    }
+                    instrumentation.waitForIdleSync()
+                }
                 view(R.id.home_status_title).check(androidx.test.espresso.assertion.ViewAssertions.matches(
                     androidx.test.espresso.matcher.ViewMatchers.withText(R.string.everything_backed_up)))
                 instrumentation.uiAutomation.takeScreenshot()?.let { bitmap -> File(app.cacheDir,"home-review.png").outputStream().use { output ->
                     bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output)
                 }; bitmap.recycle() }
-                view(R.id.home_tools_button).perform(androidx.test.espresso.action.ViewActions.scrollTo(),androidx.test.espresso.action.ViewActions.click())
-                androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText(R.string.encrypted_archives))
+                reveal(R.id.home_tools_button)
+                view(R.id.home_tools_button).perform(androidx.test.espresso.action.ViewActions.click())
+                androidx.test.espresso.Espresso.onData(org.hamcrest.Matchers.equalTo(instrumentation.targetContext.getString(R.string.encrypted_archives)))
+                    .inAdapterView(androidx.test.espresso.matcher.ViewMatchers.withId(androidx.appcompat.R.id.select_dialog_listview))
                     .check(androidx.test.espresso.assertion.ViewAssertions.matches(androidx.test.espresso.matcher.ViewMatchers.isDisplayed()))
                 view(android.R.id.button2).perform(androidx.test.espresso.action.ViewActions.click())
-                view(R.id.home_settings_button).perform(androidx.test.espresso.action.ViewActions.scrollTo(),androidx.test.espresso.action.ViewActions.click())
+                reveal(R.id.home_settings_button)
+                view(R.id.home_settings_button).perform(androidx.test.espresso.action.ViewActions.click())
                 app.durableBackupStore.recordCheck("primary")
                 instrumentation.waitForIdleSync()
                 scenario.onActivity { activity ->
@@ -164,7 +178,8 @@ class ImprovementInstrumentedTest {
                 instrumentation.uiAutomation.takeScreenshot()?.let { bitmap -> File(app.cacheDir,"settings-review.png").outputStream().use { output ->
                     bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output)
                 }; bitmap.recycle() }
-                view(R.id.backup_constraints_button).perform(androidx.test.espresso.action.ViewActions.scrollTo(),androidx.test.espresso.action.ViewActions.click())
+                reveal(R.id.backup_constraints_button)
+                view(R.id.backup_constraints_button).perform(androidx.test.espresso.action.ViewActions.click())
                 androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText(R.string.daily_backup))
                     .check(androidx.test.espresso.assertion.ViewAssertions.matches(androidx.test.espresso.matcher.ViewMatchers.isDisplayed()))
                 instrumentation.uiAutomation.takeScreenshot()?.let { bitmap -> File(app.cacheDir,"preferences-review.png").outputStream().use { output ->

@@ -98,6 +98,7 @@ jobs:
           api-level: ${{ matrix.api }}
           arch: x86_64
           target: default
+          profile: pixel_2
           disable-animations: true
           script: ./gradlew --no-daemon connectedDebugAndroidTest
       - name: Upload device reports
