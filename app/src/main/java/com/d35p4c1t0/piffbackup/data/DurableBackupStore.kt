@@ -22,6 +22,33 @@ class DurableBackupStore(
         }
     }
 
+    suspend fun recordCheck(profileId: String) {
+        database.withWriteTransaction {
+            val health = dao.health(profileId) ?: BackupHealthEntity(profileId, null, null, null)
+            val now = checkedNow()
+            dao.saveHealth(health.copy(lastCheckedAtEpochMillis = now))
+            dao.mappings(profileId).filter { it.enabled }.forEach { mapping ->
+                val folder = dao.folderHealth(mapping.id) ?: FolderHealthEntity(mapping.id, null, null, null, null)
+                dao.saveFolderHealth(folder.copy(lastCheckedAtEpochMillis = now))
+            }
+        }
+    }
+
+    suspend fun recordVerification(profileId: String, scope: String, mappingId: String? = null) {
+        database.withWriteTransaction {
+            val health = dao.health(profileId) ?: BackupHealthEntity(profileId, null, null, null)
+            val now = checkedNow()
+            dao.saveHealth(health.copy(lastVerifiedAtEpochMillis = now, verificationScope = scope))
+            mappingId?.let { id ->
+                val folder = dao.folderHealth(id) ?: FolderHealthEntity(id, null, null, null, null)
+                dao.saveFolderHealth(folder.copy(lastVerifiedAtEpochMillis = now, verificationScope = scope))
+            }
+        }
+    }
+
+    suspend fun health(profileId: String) = dao.health(profileId)
+    suspend fun history(profileId: String) = dao.history(profileId)
+
     suspend fun establishCheckpoint(
         profileId: String,
         checkpoint: MediaStoreCheckpoint,
@@ -100,6 +127,7 @@ class DurableBackupStore(
             updatedAtEpochMillis = now,
         )
         dao.upsertCheckpoint(entity)
+        resolveProblems(profileId, now)
         dao.insertBackupRun(
             BackupRunEntity(
                 id = runId,
@@ -161,19 +189,19 @@ class DurableBackupStore(
         validateJobDraft(draft)
         val canonicalLists = draft.roots.map { root -> root to requireValidFileList(root.fileListPath) }
         return database.withWriteTransaction {
-            require(dao.activeJobs().isEmpty()) { "Another backup job is already pending" }
+            require(dao.activeJobs().isEmpty() && dao.activeOperations().isEmpty()) { "Another task is already pending" }
             val profile = requireNotNull(dao.profile(draft.profileId)) { "Profile does not exist" }
             require(profile.configurationRevision == draft.configurationRevision) {
                 "Profile configuration changed before job persistence"
             }
-            val checkpoint = requireNotNull(dao.checkpoint(draft.profileId, draft.volumeName)) {
-                "Successful checkpoint does not exist"
-            }
-            require(
-                checkpoint.mediaStoreVersion == draft.mediaStoreVersion &&
+            val checkpoint = dao.checkpoint(draft.profileId, draft.volumeName)
+            if (!com.d35p4c1t0.piffbackup.scheduling.BackupJobKind.resetsCheckpoint(draft.id)) {
+                require(checkpoint != null &&
+                    checkpoint.mediaStoreVersion == draft.mediaStoreVersion &&
                     checkpoint.successfulGeneration == draft.previousGeneration &&
                     checkpoint.configurationRevision == draft.configurationRevision
-            ) { "Checkpoint changed before job persistence" }
+                ) { "Checkpoint changed before job persistence" }
+            }
 
             val mappings = dao.mappingsById(draft.roots.map { it.folderMappingId }).associateBy { it.id }
             require(mappings.size == draft.roots.size) { "A planned mapping no longer exists" }
@@ -232,6 +260,37 @@ class DurableBackupStore(
         }
     }
 
+    suspend fun markQueued(jobId: String) {
+        database.withWriteTransaction {
+            val job = dao.job(jobId) ?: return@withWriteTransaction
+            if (job.status in RUNNABLE_JOB_STATUSES && job.status != PendingJobStatusValue.RUNNING) {
+                dao.updateJob(job.copy(status = PendingJobStatusValue.QUEUED, updatedAtEpochMillis = checkedNow()))
+            }
+            Unit
+        }
+    }
+
+    suspend fun beginAttempt(jobId: String) {
+        database.withWriteTransaction {
+            val job = requireNotNull(dao.job(jobId))
+            dao.updateJob(job.copy(attempts = job.attempts + 1))
+        }
+    }
+
+    suspend fun markInterrupted(jobId: String, paused: Boolean) {
+        database.withWriteTransaction {
+            val job = dao.job(jobId) ?: return@withWriteTransaction
+            if (job.status !in RUNNABLE_JOB_STATUSES) return@withWriteTransaction
+            val now = checkedNow()
+            dao.rootWork(jobId).filter { it.status == PendingRootStatusValue.RUNNING }.forEach {
+                dao.updateRootWork(it.copy(status = PendingRootStatusValue.RETRYABLE, updatedAtEpochMillis = now))
+            }
+            dao.updateJob(job.copy(status = if (paused) PendingJobStatusValue.PAUSED else PendingJobStatusValue.RETRYABLE,
+                updatedAtEpochMillis = now))
+            Unit
+        }
+    }
+
     suspend fun markRootRunning(jobId: String, mappingId: String): DurablePendingJob =
         database.withWriteTransaction {
             val job = requireNotNull(dao.job(jobId)) { "Pending job does not exist" }
@@ -270,6 +329,8 @@ class DurableBackupStore(
         completedBytes: Long,
         rsyncExitCode: Int?,
         sanitizedErrorCode: String? = null,
+        uploadedFiles: Long = completedFiles,
+        uploadedBytes: Long = completedBytes,
     ): DurablePendingJob = database.withWriteTransaction {
         val job = requireNotNull(dao.job(jobId)) { "Pending job does not exist" }
         if (job.status == PendingJobStatusValue.SUCCEEDED) {
@@ -285,6 +346,7 @@ class DurableBackupStore(
             require(rsyncExitCode == 0) { "Successful root must have rsync exit code zero" }
             require(sanitizedErrorCode == null) { "Successful root must not have an error code" }
         }
+        require(uploadedFiles >= 0L && uploadedBytes >= 0L) { "Invalid transfer metrics" }
         val now = checkedNow()
         if (outcome == RootExecutionOutcome.SUCCESS) {
             val mapping = dao.mappingsById(listOf(mappingId)).singleOrNull()
@@ -298,6 +360,8 @@ class DurableBackupStore(
                 completedFiles = root.totalFiles,
                 completedBytes = root.totalBytes,
                 rsyncExitCode = 0,
+                uploadedFiles = root.uploadedFiles.checkedAdd(uploadedFiles, "Transferred count overflow"),
+                uploadedBytes = root.uploadedBytes.checkedAdd(uploadedBytes, "Transferred bytes overflow"),
                 sanitizedErrorCode = null,
                 updatedAtEpochMillis = now,
             )
@@ -309,6 +373,8 @@ class DurableBackupStore(
                 completedFiles = completedFiles,
                 completedBytes = completedBytes,
                 rsyncExitCode = rsyncExitCode,
+                uploadedFiles = root.uploadedFiles.checkedAdd(uploadedFiles,"Transferred count overflow"),
+                uploadedBytes = root.uploadedBytes.checkedAdd(uploadedBytes,"Transferred bytes overflow"),
                 sanitizedErrorCode = sanitizedErrorCode,
                 updatedAtEpochMillis = now,
             )
@@ -318,6 +384,8 @@ class DurableBackupStore(
                 completedFiles = completedFiles,
                 completedBytes = completedBytes,
                 rsyncExitCode = rsyncExitCode,
+                uploadedFiles = root.uploadedFiles.checkedAdd(uploadedFiles,"Transferred count overflow"),
+                uploadedBytes = root.uploadedBytes.checkedAdd(uploadedBytes,"Transferred bytes overflow"),
                 sanitizedErrorCode = sanitizedErrorCode ?: DurableErrorCode.TRANSFER_FAILED,
                 updatedAtEpochMillis = now,
             )
@@ -333,6 +401,11 @@ class DurableBackupStore(
         val updatedJob = if (roots.all { it.status == PendingRootStatusValue.SUCCEEDED }) {
             completeJob(job, roots, now)
         } else {
+            if (outcome == RootExecutionOutcome.PERMANENT_FAILURE && dao.backupRun(job.id) == null) {
+                dao.insertBackupRun(BackupRunEntity(job.id, job.profileId, job.createdAtEpochMillis, now,
+                    BackupRunResultValue.FAILED, job.totalFiles, roots.sumOf { it.uploadedFiles }, roots.sumOf { it.uploadedBytes }, updatedRoot.sanitizedErrorCode))
+                dao.pruneHistory(job.profileId)
+            }
             val status = when (outcome) {
                 RootExecutionOutcome.CANCELLED -> PendingJobStatusValue.PAUSED
                 RootExecutionOutcome.RETRYABLE_FAILURE -> PendingJobStatusValue.RETRYABLE
@@ -396,7 +469,7 @@ class DurableBackupStore(
             if (allClean) {
                 database.withWriteTransaction {
                     val current = dao.job(job.id)
-                    if (current?.status == PendingJobStatusValue.SUCCEEDED && dao.deleteJob(job.id) == 1) {
+                    if (current?.status in setOf(PendingJobStatusValue.SUCCEEDED, PendingJobStatusValue.SUPERSEDED) && dao.deleteJob(job.id) == 1) {
                         cleaned++
                     }
                 }
@@ -441,8 +514,32 @@ class DurableBackupStore(
         return DurablePendingJob(job, dao.rootWork(job.id))
     }
 
+    suspend fun discardJob(jobId: String) {
+        database.withWriteTransaction {
+            val job = dao.job(jobId) ?: return@withWriteTransaction
+            require(job.status != PendingJobStatusValue.RUNNING) { "Pause the job before discarding it" }
+            dao.updateJob(job.copy(status = PendingJobStatusValue.SUPERSEDED, updatedAtEpochMillis = checkedNow()))
+            Unit
+        }
+        cleanupSucceededJobs()
+    }
+
+    private suspend fun resolveProblems(profileId: String, now: Long) {
+        dao.jobs().filter { it.profileId == profileId &&
+            it.status in setOf(PendingJobStatusValue.FAILED, PendingJobStatusValue.NEEDS_RECONCILIATION) }.forEach {
+            dao.updateJob(it.copy(status = PendingJobStatusValue.SUPERSEDED, updatedAtEpochMillis = now))
+        }
+    }
+
     suspend fun latestProblemJob(profileId: String): PendingBackupJobEntity? =
         dao.latestProblemJob(profileId)
+
+    suspend fun failJob(jobId: String, error: String) = database.withWriteTransaction {
+        dao.job(jobId)?.takeIf { it.status in RUNNABLE_JOB_STATUSES }?.let { job ->
+            dao.updateJob(job.copy(status = PendingJobStatusValue.FAILED, sanitizedErrorCode = error,
+                updatedAtEpochMillis = checkedNow()))
+        }
+    }
 
     suspend fun markJobPaused(jobId: String): DurablePendingJob? = database.withWriteTransaction {
         val job = dao.job(jobId) ?: return@withWriteTransaction null
@@ -461,6 +558,9 @@ class DurableBackupStore(
         DurablePendingJob(paused, roots)
     }
 
+    suspend fun hasEstablishedBaseline(profileId: String): Boolean =
+        dao.checkpoint(profileId,"external_primary") != null || dao.latestSuccessfulBackupRun(profileId) != null
+
     suspend fun latestSuccessfulRun(profileId: String): BackupRunEntity? =
         dao.latestSuccessfulBackupRun(profileId)
 
@@ -470,7 +570,8 @@ class DurableBackupStore(
         now: Long,
     ): PendingBackupJobEntity {
         val checkpoint = dao.checkpoint(job.profileId, job.volumeName)
-        val checkpointMatches = checkpoint != null &&
+        val resetsCheckpoint = com.d35p4c1t0.piffbackup.scheduling.BackupJobKind.resetsCheckpoint(job.id)
+        val checkpointMatches = resetsCheckpoint || checkpoint != null &&
             checkpoint.mediaStoreVersion == job.mediaStoreVersion &&
             checkpoint.successfulGeneration == job.previousGeneration &&
             checkpoint.configurationRevision == job.configurationRevision
@@ -484,10 +585,8 @@ class DurableBackupStore(
             ).also { check(dao.updateJob(it) == 1) { "Checkpoint conflict update was lost" } }
         }
         dao.upsertCheckpoint(
-            requireNotNull(checkpoint).copy(
-                successfulGeneration = job.targetGeneration,
-                updatedAtEpochMillis = now,
-            ),
+            MediaCheckpointEntity(job.profileId, job.volumeName, job.mediaStoreVersion,
+                job.targetGeneration, job.configurationRevision, now),
         )
         val completedJob = job.copy(
             status = PendingJobStatusValue.SUCCEEDED,
@@ -497,6 +596,11 @@ class DurableBackupStore(
             sanitizedErrorCode = null,
         )
         check(dao.updateJob(completedJob) == 1) { "Job completion update was lost" }
+        resolveProblems(job.profileId, now)
+        roots.forEach { root ->
+            val folder = dao.folderHealth(root.folderMappingId) ?: FolderHealthEntity(root.folderMappingId, null, null, null, null)
+            dao.saveFolderHealth(folder.copy(lastBackupAtEpochMillis = now))
+        }
         dao.insertBackupRun(
             BackupRunEntity(
                 id = job.id,
@@ -506,14 +610,15 @@ class DurableBackupStore(
                 result = BackupRunResultValue.SUCCEEDED,
                 discoveredFiles = job.totalFiles,
                 uploadedFiles = roots.fold(0L) { total, root ->
-                    total.checkedAdd(root.totalFiles, "Uploaded file count overflow")
+                    total.checkedAdd(root.uploadedFiles, "Uploaded file count overflow")
                 },
                 uploadedBytes = roots.fold(0L) { total, root ->
-                    total.checkedAdd(root.totalBytes, "Uploaded byte count overflow")
+                    total.checkedAdd(root.uploadedBytes, "Uploaded byte count overflow")
                 },
                 sanitizedErrorCode = null,
             ),
         )
+        dao.pruneHistory(job.profileId)
         return completedJob
     }
 
@@ -535,14 +640,14 @@ class DurableBackupStore(
         if (profile.configurationRevision != job.configurationRevision) {
             return DurableErrorCode.CONFIGURATION_CHANGED
         }
-        val checkpoint = dao.checkpoint(job.profileId, job.volumeName)
-            ?: return DurableErrorCode.CHECKPOINT_CHANGED
-        if (
-            checkpoint.mediaStoreVersion != job.mediaStoreVersion ||
-            checkpoint.successfulGeneration != job.previousGeneration ||
-            checkpoint.configurationRevision != job.configurationRevision
-        ) {
-            return DurableErrorCode.CHECKPOINT_CHANGED
+        if (!com.d35p4c1t0.piffbackup.scheduling.BackupJobKind.resetsCheckpoint(job.id)) {
+            val checkpoint = dao.checkpoint(job.profileId, job.volumeName)
+                ?: return DurableErrorCode.CHECKPOINT_CHANGED
+            if (checkpoint.mediaStoreVersion != job.mediaStoreVersion ||
+                checkpoint.successfulGeneration != job.previousGeneration ||
+                checkpoint.configurationRevision != job.configurationRevision) {
+                return DurableErrorCode.CHECKPOINT_CHANGED
+            }
         }
         if (
             roots.isEmpty() ||
@@ -691,6 +796,7 @@ class DurableBackupStore(
         val SANITIZED_ERROR = Regex("[A-Z][A-Z0-9_]{0,63}")
         val RUNNABLE_JOB_STATUSES = setOf(
             PendingJobStatusValue.PLANNED,
+            PendingJobStatusValue.QUEUED,
             PendingJobStatusValue.RUNNING,
             PendingJobStatusValue.PAUSED,
             PendingJobStatusValue.RETRYABLE,

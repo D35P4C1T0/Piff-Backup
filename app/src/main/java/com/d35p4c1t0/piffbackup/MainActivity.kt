@@ -63,6 +63,8 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 import java.util.Date
 import java.util.UUID
 import java.util.ArrayDeque
@@ -70,11 +72,14 @@ import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
+    private lateinit var toolsController: com.d35p4c1t0.piffbackup.ui.BackupToolsController
+    private lateinit var backupViewModel: com.d35p4c1t0.piffbackup.ui.BackupViewModel
     private val executor = Executors.newSingleThreadExecutor()
     private val app: PiffBackupApp get() = application as PiffBackupApp
     private val draftMappings = mutableListOf<FolderMappingInput>()
 
     private var activeProfile: StorageBoxProfileEntity? = null
+    private var selectedProvider = com.d35p4c1t0.piffbackup.transport.RsyncTargetProvider.HETZNER
     private var pendingLocalFolder: LocalTreeSelection? = null
     private var remoteBrowserParent: RemoteRelativePath? = null
     private var selectedRemotePath: String? = null
@@ -88,13 +93,16 @@ class MainActivity : AppCompatActivity() {
     private var transferLogJobId: String? = null
     private val transferLogEntries = ArrayDeque<String>()
     private var jobAwaitingNotificationPermission: String? = null
+    private var navigationEpoch = 0L
     private var currentScreen: View? = null
+    private var durableObserver: kotlinx.coroutines.Job? = null
     private var restoreTarget: RestoreTarget? = null
     private var restoredProfileId: String? = null
     private var restoredDraftMappings: List<FolderMappingInput>? = null
     private var restoredPendingLocalFolder: LocalTreeSelection? = null
     private var restoredRemoteBrowserParent: String? = null
     private var restoredSelectedRemotePath: String? = null
+    private var restoredConnectionDraft: Bundle? = null
     private var restoredNewRemoteFolderName: String? = null
     private var restoredAllFilesMode = false
 
@@ -153,6 +161,10 @@ class MainActivity : AppCompatActivity() {
         WindowCompat.enableEdgeToEdge(window)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        toolsController = com.d35p4c1t0.piffbackup.ui.BackupToolsController(this, app,
+            { id -> selectActivePendingJob(id); schedulePendingBackup(id) },
+            { loadExistingProfile(forceConnect = false) })
+        backupViewModel = androidx.lifecycle.ViewModelProvider(this)[com.d35p4c1t0.piffbackup.ui.BackupViewModel::class.java]
         restoreTransientUiState(savedInstanceState)
         configureResponsiveScaffold()
         bindActions()
@@ -215,6 +227,16 @@ class MainActivity : AppCompatActivity() {
             binding.hostnameLayout.visibility = if (checked) View.VISIBLE else View.GONE
         }
         binding.connectButton.setOnClickListener { beginConnection() }
+        binding.providerButton.setOnClickListener {
+            val providers = com.d35p4c1t0.piffbackup.transport.RsyncTargetProvider.entries
+            MaterialAlertDialogBuilder(this).setTitle(R.string.target_provider)
+                .setItems(arrayOf(getString(R.string.hetzner_provider), getString(R.string.ssh_rsync_provider))) { _, index ->
+                    selectedProvider = providers[index]
+                    binding.portInput.setText(selectedProvider.defaultPort.toString())
+                    binding.advancedHostnameToggle.isChecked = selectedProvider != com.d35p4c1t0.piffbackup.transport.RsyncTargetProvider.HETZNER
+                    binding.providerButton.setText(if (index == 0) R.string.hetzner_provider else R.string.ssh_rsync_provider)
+                }.show()
+        }
         binding.confirmDestinationButton.setOnClickListener {
             selectedOnboardingRoot?.let { completeDestinationSelection(it.relativePath) }
         }
@@ -275,6 +297,26 @@ class MainActivity : AppCompatActivity() {
             )
         }
         binding.homeGroup.homeBackupButton.setOnClickListener { handleHomePrimaryAction() }
+        binding.homeGroup.homeRecoverButton.setOnClickListener {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.replan_backup)
+                .setMessage(R.string.replan_backup_help)
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.replan_backup) { _, _ ->
+                    val profile = activeProfile ?: return@setPositiveButton
+                    executor.execute {
+                        runBlocking {
+                            val pending = app.durableBackupStore.activeJob(profile.id)
+                            pending?.let { app.backupScheduler.pause(it.job.id) }
+                            val operation = app.database.dao().operations(profile.id).firstOrNull { it.status in setOf("PLANNED", "QUEUED", "RUNNING", "PAUSED", "FAILED") }
+                            operation?.let { if (it.status != "FAILED") app.backupScheduler.pause(it.id); app.remoteOperations.discard(it.id) }
+                            val id = pending?.job?.id ?: app.durableBackupStore.latestProblemJob(profile.id)?.id
+                            id?.let { app.durableBackupStore.discardJob(it) }
+                        }
+                        runOnUiThread { if (!isDestroyed) beginAdoptionPreview() }
+                    }
+                }.show()
+        }
         binding.homeGroup.homeTransferLogToggle.setOnClickListener {
             toggleCompactSection(
                 binding.homeGroup.homeTransferLogEntries,
@@ -287,6 +329,9 @@ class MainActivity : AppCompatActivity() {
             showMappingSetup()
         }
         binding.homeGroup.homeSettingsButton.setOnClickListener { showSettings() }
+        binding.homeGroup.homeToolsButton.setOnClickListener { toolsController.show() }
+        binding.settingsGroup.backupConstraintsButton.setOnClickListener { toolsController.editPolicy() }
+        binding.settingsGroup.exclusionsButton.setOnClickListener { toolsController.editExclusions() }
         binding.adoptionFlow.previewBackHomeButton.setOnClickListener {
             app.initialAdoptionCoordinator.discardPreview()
             activePreview = null
@@ -313,27 +358,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadExistingProfile(forceConnect: Boolean) {
+        val requestedNavigationEpoch = navigationEpoch
         executor.execute {
-            val state = runBlocking {
-                val profile = app.configurationStore.profile(OnboardingRequest.DEFAULT_PROFILE_ID)
-                val mappings = profile?.let { app.configurationStore.mappings(it.id) }.orEmpty()
-                val checkpoint = profile?.let {
-                    app.durableBackupStore.checkpointForPlanning(it.id, PRIMARY_VOLUME)
+            val state = try { runBlocking { backupViewModel.snapshot() } } catch (_: Exception) {
+                runOnUiThread {
+                    if (!isDestroyed) MaterialAlertDialogBuilder(this)
+                        .setTitle(R.string.needs_attention).setMessage(R.string.error_secure_storage)
+                        .setPositiveButton(android.R.string.ok, null).show()
                 }
-                val lastSuccessfulRun = profile?.let { app.durableBackupStore.latestSuccessfulRun(it.id) }
-                val pending = profile?.let { app.durableBackupStore.activeJob(it.id) }
-                val problem = profile?.let { app.durableBackupStore.latestProblemJob(it.id) }
-                ExistingState(
-                    profile,
-                    mappings,
-                    checkpoint != null,
-                    lastSuccessfulRun?.finishedAtEpochMillis,
-                    pending,
-                    problem,
-                )
+                return@execute
             }
             runOnUiThread {
-                if (isDestroyed) return@runOnUiThread
+                if (isDestroyed || navigationEpoch != requestedNavigationEpoch) return@runOnUiThread
                 activeProfile = state.profile
                 draftMappings.clear()
                 val restoredMappings = restoredDraftMappings
@@ -341,12 +377,25 @@ class MainActivity : AppCompatActivity() {
                 draftMappings += restoredMappings ?: state.mappings.map(::mappingInput)
                 restoredDraftMappings = null
                 hasCompletedAdoption = state.lastSuccessfulBackupAtEpochMillis != null || state.hasCheckpoint
-                selectActivePendingJob(state.pending?.job?.id)
+                selectActivePendingJob(state.operation?.id ?: state.pending?.job?.id)
                 val profile = state.profile
                 val pendingConnection = app.onboardingCoordinator.pendingConnection()
                 val target = restoreTarget.also { restoreTarget = null }
                 if (!forceConnect && pendingConnection != null) {
                     showDestinationPicker(pendingConnection)
+                } else if (!forceConnect && target == RestoreTarget.CONNECTION) {
+                    showConnect(profile)
+                    restoredConnectionDraft?.let { draft ->
+                        selectedProvider = com.d35p4c1t0.piffbackup.transport.RsyncTargetProvider.valueOf(draft.getString("provider") ?: "HETZNER")
+                        binding.providerButton.setText(if (selectedProvider == com.d35p4c1t0.piffbackup.transport.RsyncTargetProvider.HETZNER) R.string.hetzner_provider else R.string.ssh_rsync_provider)
+                        binding.usernameInput.setText(draft.getString("username"))
+                        binding.hostnameInput.setText(draft.getString("hostname"))
+                        binding.portInput.setText(draft.getString("port"))
+                        binding.fingerprintInput.setText(draft.getString("fingerprint"))
+                        binding.advancedHostnameToggle.isChecked = draft.getBoolean("advanced")
+                        binding.rotateClientKey.isChecked = draft.getBoolean("rotate")
+                    }
+                    restoredConnectionDraft = null
                 } else if (!forceConnect && target == RestoreTarget.SETTINGS && profile?.setupCompleted == true) {
                     showSettings()
                 } else if (!forceConnect && target == RestoreTarget.FOLDERS && profile?.setupCompleted == true) {
@@ -363,6 +412,7 @@ class MainActivity : AppCompatActivity() {
                             } else {
                                 PreviewPurpose.NORMAL_BACKUP
                             }
+                            latestHomeState = homeState(state)
                             showAdoptionPreview(requireNotNull(app.initialAdoptionCoordinator.currentPreview()))
                         }
                         hasCompletedAdoption -> showHome(homeState(state))
@@ -377,7 +427,23 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun beginConnection() {
+    private fun beginConnection(allowHostKeyRotation: Boolean = false) {
+        val fingerprint = binding.fingerprintInput.text?.toString()?.trim().orEmpty()
+        if (!Regex("SHA256:[A-Za-z0-9+/]{43}").matches(fingerprint)) {
+            binding.fingerprintLayout.error = getString(R.string.fingerprint_required)
+            return
+        }
+        binding.fingerprintLayout.error = null
+        val existingFingerprint = activeProfile?.pinnedHostKey?.let {
+            runCatching { HostKeyPin.parse(it).sha256Fingerprint }.getOrNull()
+        }
+        if (existingFingerprint != null && existingFingerprint != fingerprint && !allowHostKeyRotation) {
+            MaterialAlertDialogBuilder(this).setTitle(R.string.confirm_server_identity)
+                .setMessage(R.string.confirm_server_identity_help)
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.confirm_server_identity) { _, _ -> beginConnection(true) }.show()
+            return
+        }
         val passwordEditable = binding.passwordInput.text
         binding.usernameLayout.error = null
         binding.passwordLayout.error = null
@@ -403,6 +469,8 @@ class MainActivity : AppCompatActivity() {
                 username = binding.usernameInput.text?.toString().orEmpty(),
                 advancedHostname = binding.hostnameInput.text?.toString()
                     .takeIf { binding.advancedHostnameToggle.isChecked },
+                provider = selectedProvider,
+                port = binding.portInput.text?.toString()?.toIntOrNull() ?: selectedProvider.defaultPort,
             )
         }.getOrElse {
             password.fill('\u0000')
@@ -410,7 +478,9 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val request = runCatching {
-            OnboardingRequest(endpoint = endpoint, password = password)
+            OnboardingRequest(endpoint = endpoint, password = password,
+                expectedFingerprint = fingerprint, allowHostKeyRotation = allowHostKeyRotation,
+                rotateClientKey = binding.rotateClientKey.isChecked)
         }.getOrElse {
             password.fill('\u0000')
             showConnectionError(OnboardingErrorCode.INVALID_INPUT)
@@ -447,9 +517,20 @@ class MainActivity : AppCompatActivity() {
         renderHomeState(state)
     }
 
-    private fun homeState(state: ExistingState): HomeScreenState {
+    private fun homeState(state: com.d35p4c1t0.piffbackup.ui.BackupSnapshot): HomeScreenState {
         val pending = state.pending?.job
         val mappingCount = state.mappings.count { it.enabled }
+        state.operation?.let { operation ->
+            return HomeScreenState(
+                status = when (operation.status) {
+                    "RUNNING" -> HomeBackupStatus.BACKING_UP
+                    "QUEUED" -> HomeBackupStatus.QUEUED
+                    "PAUSED", "PLANNED" -> HomeBackupStatus.PAUSED
+                    else -> HomeBackupStatus.NEEDS_ATTENTION
+                }, mappingCount = mappingCount,
+                lastSuccessfulBackupAtEpochMillis = state.lastSuccessfulBackupAtEpochMillis,
+                progressPercentage = if (operation.status == "RUNNING") 0 else null, operation = true)
+        }
         if (pending != null) {
             val percentage = if (pending.totalBytes > 0L) {
                 ((pending.completedBytes * 100L) / pending.totalBytes).toInt().coerceIn(0, 100)
@@ -459,6 +540,7 @@ class MainActivity : AppCompatActivity() {
             return HomeScreenState(
                 status = when (pending.status) {
                     PendingJobStatusValue.RUNNING -> HomeBackupStatus.BACKING_UP
+                    PendingJobStatusValue.QUEUED -> HomeBackupStatus.QUEUED
                     PendingJobStatusValue.PAUSED,
                     PendingJobStatusValue.RETRYABLE,
                     -> HomeBackupStatus.PAUSED
@@ -488,6 +570,7 @@ class MainActivity : AppCompatActivity() {
     private fun renderHomeState(state: HomeScreenState) {
         binding.homeGroup.homeStatusTitle.setText(
             when (state.status) {
+                HomeBackupStatus.QUEUED -> R.string.backup_queued
                 HomeBackupStatus.EVERYTHING_BACKED_UP -> R.string.everything_backed_up
                 HomeBackupStatus.LOOKING_FOR_CHANGES -> R.string.looking_for_new_media
                 HomeBackupStatus.NEW_ITEMS_READY -> R.string.new_items_ready
@@ -497,6 +580,7 @@ class MainActivity : AppCompatActivity() {
             },
         )
         binding.homeGroup.homeStatusDetail.text = oneShotHomeMessage ?: when (state.status) {
+            HomeBackupStatus.QUEUED -> getString(R.string.backup_queued_help)
             HomeBackupStatus.EVERYTHING_BACKED_UP -> getString(R.string.home_up_to_date_detail)
             HomeBackupStatus.LOOKING_FOR_CHANGES -> getString(R.string.discovery_safe_detail)
             HomeBackupStatus.NEW_ITEMS_READY -> getString(
@@ -505,7 +589,7 @@ class MainActivity : AppCompatActivity() {
                 UserFacingFormat.bytes(state.changedBytes),
             )
             HomeBackupStatus.BACKING_UP -> getString(
-                R.string.backing_up_percentage_format,
+                if (state.operation) R.string.operation_percentage_format else R.string.backing_up_percentage_format,
                 requireNotNull(state.progressPercentage),
             )
             HomeBackupStatus.PAUSED -> getString(R.string.backup_paused_detail)
@@ -517,7 +601,7 @@ class MainActivity : AppCompatActivity() {
         binding.homeGroup.homeBackupButton.setText(
             when (state.status) {
                 HomeBackupStatus.PAUSED -> R.string.resume_backup
-                HomeBackupStatus.BACKING_UP -> R.string.pause_backup
+                HomeBackupStatus.QUEUED, HomeBackupStatus.BACKING_UP -> R.string.pause_backup
                 HomeBackupStatus.NEW_ITEMS_READY -> R.string.start_backup
                 HomeBackupStatus.NEEDS_ATTENTION -> {
                     if (state.mappingCount == 0) R.string.choose_folders else R.string.try_again
@@ -547,10 +631,13 @@ class MainActivity : AppCompatActivity() {
             binding.homeGroup.homeProgress.setProgressCompat(it, ValueAnimator.areAnimatorsEnabled())
         }
         binding.homeGroup.homeBackupButton.isEnabled = state.status != HomeBackupStatus.LOOKING_FOR_CHANGES
+        binding.homeGroup.homeRecoverButton.isVisible = state.status in
+            setOf(HomeBackupStatus.PAUSED, HomeBackupStatus.NEEDS_ATTENTION)
         val navigationEnabled = state.status != HomeBackupStatus.LOOKING_FOR_CHANGES &&
             state.status != HomeBackupStatus.BACKING_UP
         binding.homeGroup.homeFoldersButton.isEnabled = navigationEnabled
         binding.homeGroup.homeSettingsButton.isEnabled = navigationEnabled
+        binding.homeGroup.homeToolsButton.isEnabled = navigationEnabled
         binding.homeGroup.homeLastBackup.text = state.lastSuccessfulBackupAtEpochMillis?.let {
             getString(R.string.last_backup_format, formatDateTime(it))
         } ?: getString(R.string.last_backup_never)
@@ -616,6 +703,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showConnect(profile: StorageBoxProfileEntity?) {
+        selectedProvider = profile?.provider?.let { com.d35p4c1t0.piffbackup.transport.RsyncTargetProvider.valueOf(it) }
+            ?: com.d35p4c1t0.piffbackup.transport.RsyncTargetProvider.HETZNER
+        binding.providerButton.setText(if (selectedProvider == com.d35p4c1t0.piffbackup.transport.RsyncTargetProvider.HETZNER)
+            R.string.hetzner_provider else R.string.ssh_rsync_provider)
+        binding.portInput.setText((profile?.port ?: selectedProvider.defaultPort).toString())
         app.initialAdoptionCoordinator.discardPreview()
         activePreview = null
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -627,6 +719,9 @@ class MainActivity : AppCompatActivity() {
         binding.advancedHostnameToggle.isChecked = advanced != null
         binding.hostnameInput.setText(advanced.orEmpty())
         binding.passwordInput.text?.clear()
+        binding.fingerprintInput.setText(profile?.pinnedHostKey?.let {
+            runCatching { HostKeyPin.parse(it).sha256Fingerprint }.getOrNull()
+        }.orEmpty())
         binding.usernameLayout.error = null
         binding.passwordLayout.error = null
         binding.hostnameLayout.error = null
@@ -825,6 +920,9 @@ class MainActivity : AppCompatActivity() {
             return
         }
         pendingLocalFolder = selection
+        if (selection.volumeName != "external_primary") {
+            binding.allFilesMode.isChecked = true
+        }
         selectedRemotePath = null
         remoteBrowserParent = RemoteRelativePath.create(requireNotNull(activeProfile).remoteBasePath)
         showOnly(binding.mappingEditorGroup)
@@ -847,6 +945,9 @@ class MainActivity : AppCompatActivity() {
             return
         }
         pendingLocalFolder = selection
+        if (selection.volumeName != "external_primary") {
+            binding.allFilesMode.isChecked = true
+        }
         remoteBrowserParent = runCatching {
             RemoteRelativePath.create(restoredRemoteBrowserParent ?: profile.remoteBasePath)
         }.getOrElse { RemoteRelativePath.create(profile.remoteBasePath) }
@@ -971,7 +1072,7 @@ class MainActivity : AppCompatActivity() {
             canonicalLocalPath = local.canonicalPath,
             relativeMediaStorePrefix = local.relativeMediaStorePrefix,
             relativeRemotePath = remote,
-            mode = if (binding.allFilesMode.isChecked) MappingModeValue.ALL_FILES else MappingModeValue.MEDIA_FAST,
+            mode = if (binding.allFilesMode.isChecked || local.volumeName != "external_primary") MappingModeValue.ALL_FILES else MappingModeValue.MEDIA_FAST,
         )
         val candidate = draftMappings + input
         if (!validateDraftMappings(candidate)) {
@@ -986,11 +1087,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun validateDraftMappings(inputs: List<FolderMappingInput>): Boolean = runCatching {
-        val shared = Environment.getExternalStorageDirectory()
         BackupMappingValidator.validate(
             inputs.map { input ->
                 BackupMapping(
-                    CanonicalLocalRoot.create(input.canonicalLocalPath, shared),
+                    CanonicalLocalRoot.create(input.canonicalLocalPath, app.allowedStorageRoots),
                     RemoteRelativePath.create(input.relativeRemotePath),
                 )
             },
@@ -1173,8 +1273,9 @@ class MainActivity : AppCompatActivity() {
         val normalBackup = previewPurpose == PreviewPurpose.NORMAL_BACKUP
         if (normalBackup) {
             showHome(
-                requireNotNull(latestHomeState).copy(
-                    status = HomeBackupStatus.NEW_ITEMS_READY,
+                (latestHomeState ?: HomeScreenState.loaded(draftMappings.size, null, false)).copy(
+                    status = if (preview.summary.itemsToUpload > 0L) HomeBackupStatus.NEW_ITEMS_READY
+                        else HomeBackupStatus.EVERYTHING_BACKED_UP,
                     changedItems = preview.summary.itemsToUpload,
                     changedBytes = preview.summary.bytesToUpload,
                     progressPercentage = null,
@@ -1200,6 +1301,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun beginConfirmedAdoption() {
         val preview = activePreview ?: return
+        if (preview.roots.any { it.files.itemCount > 0L }) {
+            prepareDurablePreviewOrTransfer()
+            return
+        }
         resetTransferLog(preview.id)
         if (previewPurpose == PreviewPurpose.NORMAL_BACKUP) {
             showHome(
@@ -1343,7 +1448,7 @@ class MainActivity : AppCompatActivity() {
             HomeBackupStatus.PAUSED -> {
                 activePendingJobId?.let(::schedulePendingBackup) ?: beginConfirmedAdoption()
             }
-            HomeBackupStatus.BACKING_UP -> {
+            HomeBackupStatus.QUEUED, HomeBackupStatus.BACKING_UP -> {
                 binding.homeGroup.homeBackupButton.isEnabled = false
                 val jobId = activePendingJobId
                 if (jobId == null) {
@@ -1357,6 +1462,10 @@ class MainActivity : AppCompatActivity() {
             }
             HomeBackupStatus.LOOKING_FOR_CHANGES -> Unit
             HomeBackupStatus.NEEDS_ATTENTION -> {
+                if (activePendingJobId?.startsWith("operation-") == true) {
+                    toolsController.show()
+                    return
+                }
                 if (latestHomeState?.mappingCount == 0) showMappingSetup() else checkForNewFiles()
             }
             HomeBackupStatus.EVERYTHING_BACKED_UP, null -> checkForNewFiles()
@@ -1378,9 +1487,10 @@ class MainActivity : AppCompatActivity() {
                     }
                     is InitialAdoptionResult.Failure -> {
                         binding.homeGroup.homeBackupButton.isEnabled = true
-                        // A checkpoint reset cannot be represented by the incremental durable record.
-                        // The already-confirmed reconciliation remains safe in the activity path.
-                        beginConfirmedAdoption()
+                        oneShotHomeMessage = getString(adoptionErrorMessage(result.error))
+                        app.initialAdoptionCoordinator.discardPreview()
+                        activePreview = null
+                        loadExistingProfile(forceConnect = false)
                     }
                 }
             }
@@ -1395,13 +1505,13 @@ class MainActivity : AppCompatActivity() {
         }
         executor.execute {
             val pending = runBlocking { app.durableBackupStore.pendingJob(jobId) }
-            val scheduled = pending != null && app.backupScheduler.schedule(jobId, pending.job.totalBytes)
+            val operation = runBlocking { app.database.dao().operation(jobId) }
+            val scheduled = (pending != null || operation != null) &&
+                runBlocking { app.backupScheduler.schedule(jobId, pending?.job?.totalBytes ?: 0L) }
             runOnUiThread {
                 if (isDestroyed) return@runOnUiThread
                 if (scheduled) {
-                    latestHomeState?.let { state ->
-                        showHome(state.copy(status = HomeBackupStatus.BACKING_UP, progressPercentage = 0))
-                    }
+                    loadExistingProfile(forceConnect = false)
                 } else {
                     oneShotHomeMessage = getString(R.string.backup_could_not_start)
                     latestHomeState?.let { state ->
@@ -1509,6 +1619,7 @@ class MainActivity : AppCompatActivity() {
             binding.adoptionFlow.adoptionTransferGroup,
         ).forEach { it.visibility = if (it === visible) View.VISIBLE else View.GONE }
         if (screenChanged) {
+            navigationEpoch++
             currentScreen = visible
             binding.root.post {
                 binding.mainScroll.scrollTo(0, 0)
@@ -1531,17 +1642,29 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         if (::binding.isInitialized && binding.adoptionMappingGroup.isVisible) {
             updateStorageAccessState()
+        } else if (::binding.isInitialized && binding.homeGroup.root.isVisible) {
+            loadExistingProfile(forceConnect = false)
         }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         val target = when {
+            binding.connectGroup.isVisible -> RestoreTarget.CONNECTION
             binding.settingsGroup.root.isVisible -> RestoreTarget.SETTINGS
             binding.mappingEditorGroup.isVisible -> RestoreTarget.MAPPING_EDITOR
             binding.adoptionMappingGroup.isVisible -> RestoreTarget.FOLDERS
             else -> null
         }
         target?.let { outState.putString(STATE_SCREEN, it.name) }
+        if (target == RestoreTarget.CONNECTION) outState.putBundle("connection-draft", Bundle().apply {
+            putString("provider", selectedProvider.name)
+            putString("username", binding.usernameInput.text?.toString())
+            putString("hostname", binding.hostnameInput.text?.toString())
+            putString("port", binding.portInput.text?.toString())
+            putString("fingerprint", binding.fingerprintInput.text?.toString())
+            putBoolean("advanced", binding.advancedHostnameToggle.isChecked)
+            putBoolean("rotate", binding.rotateClientKey.isChecked)
+        })
         activeProfile?.id?.let { outState.putString(STATE_PROFILE_ID, it) }
         if (target == RestoreTarget.FOLDERS || target == RestoreTarget.MAPPING_EDITOR) {
             outState.putParcelableArrayList(
@@ -1564,6 +1687,7 @@ class MainActivity : AppCompatActivity() {
         restoreTarget = savedInstanceState.getString(STATE_SCREEN)?.let { saved ->
             RestoreTarget.entries.firstOrNull { it.name == saved }
         }
+        restoredConnectionDraft = savedInstanceState.getBundle("connection-draft")
         restoredProfileId = savedInstanceState.getString(STATE_PROFILE_ID)
         restoredDraftMappings = savedInstanceState
             .getParcelableArrayList(STATE_DRAFT_MAPPINGS, Bundle::class.java)
@@ -1604,6 +1728,7 @@ class MainActivity : AppCompatActivity() {
         putString(LOCAL_TREE_URI, selection.treeUri)
         putString(LOCAL_CANONICAL_PATH, selection.canonicalPath)
         putString(LOCAL_MEDIA_PREFIX, selection.relativeMediaStorePrefix)
+        putString("local_volume", selection.volumeName)
     }
 
     private fun localFolderFromBundle(bundle: Bundle): LocalTreeSelection? = runCatching {
@@ -1612,15 +1737,23 @@ class MainActivity : AppCompatActivity() {
             treeUri = requireNotNull(bundle.getString(LOCAL_TREE_URI)),
             canonicalPath = requireNotNull(bundle.getString(LOCAL_CANONICAL_PATH)),
             relativeMediaStorePrefix = requireNotNull(bundle.getString(LOCAL_MEDIA_PREFIX)),
+            volumeName = bundle.getString("local_volume") ?: "external_primary",
         )
     }.getOrNull()
 
     override fun onStart() {
         super.onStart()
         BackupProgressEvents.addListener(backupProgressListener)
+        durableObserver = lifecycleScope.launch {
+            backupViewModel.changes.collect {
+                if (binding.homeGroup.root.isVisible) loadExistingProfile(forceConnect = false)
+            }
+        }
     }
 
     override fun onStop() {
+        durableObserver?.cancel()
+        durableObserver = null
         BackupProgressEvents.removeListener(backupProgressListener)
         super.onStop()
     }
@@ -1633,14 +1766,6 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    private data class ExistingState(
-        val profile: StorageBoxProfileEntity?,
-        val mappings: List<FolderMappingEntity>,
-        val hasCheckpoint: Boolean,
-        val lastSuccessfulBackupAtEpochMillis: Long?,
-        val pending: DurablePendingJob?,
-        val problem: PendingBackupJobEntity?,
-    )
 
     private enum class PreviewPurpose {
         INITIAL_ADOPTION,
@@ -1648,6 +1773,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private enum class RestoreTarget {
+        CONNECTION,
         SETTINGS,
         FOLDERS,
         MAPPING_EDITOR,

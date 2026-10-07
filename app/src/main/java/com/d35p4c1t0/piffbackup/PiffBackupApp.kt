@@ -29,8 +29,28 @@ import com.d35p4c1t0.piffbackup.scheduling.BackupScheduler
 import com.d35p4c1t0.piffbackup.scheduling.IncrementalBackupCoordinator
 import com.google.android.material.color.DynamicColors
 import java.io.File
+import kotlinx.coroutines.async
 
 class PiffBackupApp : Application(), Configuration.Provider {
+    private val applicationScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+    private lateinit var initialization: kotlinx.coroutines.Deferred<Unit>
+
+    suspend fun awaitReady() = initialization.await()
+    val storageVolumes: Map<String, File> get() {
+        val manager = getSystemService(android.os.storage.StorageManager::class.java)
+        return manager.storageVolumes.mapNotNull { volume -> volume.directory?.let { directory ->
+            (if (volume.isPrimary) "primary" else volume.uuid ?: return@mapNotNull null) to directory
+        } }.toMap()
+    }
+    val allowedStorageRoots: List<File> get() = storageVolumes.values.toList()
+
+    // Resolve mounted volumes at use time, including cards inserted after app startup.
+    private val liveStorageRoots = object : AbstractList<File>() {
+        override val size get() = allowedStorageRoots.size
+        override fun get(index: Int) = allowedStorageRoots[index]
+    }
+
     private val incrementalFileListRoot: File by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         File(noBackupFilesDir, "incremental-file-lists")
     }
@@ -39,6 +59,23 @@ class PiffBackupApp : Application(), Configuration.Provider {
         get() = Configuration.Builder()
             .setJobSchedulerJobIdRange(WORK_MANAGER_JOB_ID_MIN, WORK_MANAGER_JOB_ID_MAX)
             .build()
+
+    val encryptedArchives by lazy { com.d35p4c1t0.piffbackup.operations.EncryptedArchives(this) }
+
+    val remoteOperations by lazy { com.d35p4c1t0.piffbackup.operations.RemoteOperationExecutor(this) }
+
+    suspend fun executeJob(id: String, reporter: com.d35p4c1t0.piffbackup.scheduling.BackupExecutionReporter):
+        com.d35p4c1t0.piffbackup.scheduling.BackupExecutionResult {
+        awaitReady()
+        return if (id.startsWith("operation-")) remoteOperations.execute(id, reporter)
+            else backupExecutor.execute(id, reporter)
+    }
+
+    val backgroundMessages by lazy { com.d35p4c1t0.piffbackup.scheduling.BackgroundMessages(this) }
+
+    val selectionMutex = kotlinx.coroutines.sync.Mutex()
+
+    val backupPreferences by lazy { com.d35p4c1t0.piffbackup.settings.BackupPreferences(this) }
 
     val database: PiffBackupDatabase by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         PiffBackupDatabase.open(applicationContext)
@@ -55,6 +92,9 @@ class PiffBackupApp : Application(), Configuration.Provider {
         DurableConfigurationStore(
             database = database,
             allowedSharedStorageRoot = Environment.getExternalStorageDirectory(),
+            allowedRoots = liveStorageRoots,
+            selectionMutex = selectionMutex,
+            activateSelection = backupPreferences::activateSelection,
         )
     }
 
@@ -81,7 +121,7 @@ class PiffBackupApp : Application(), Configuration.Provider {
     }
 
     val treeSelectionResolver: PrimaryTreeSelectionResolver by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        PrimaryTreeSelectionResolver(Environment.getExternalStorageDirectory())
+        PrimaryTreeSelectionResolver(Environment.getExternalStorageDirectory(), volumesProvider = { storageVolumes })
     }
 
     val remoteDirectoryBrowser: NativeRemoteDirectoryBrowser by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
@@ -98,6 +138,8 @@ class PiffBackupApp : Application(), Configuration.Provider {
             snapshots = AllFilesMetadataSnapshotStore(incrementalFileListRoot),
             metadata = LocalMetadataLookup(durableBackupStore::localMetadata),
             volumeRoot = Environment.getExternalStorageDirectory(),
+            selection = backupPreferences::selection,
+            allowedRoots = liveStorageRoots,
         )
     }
 
@@ -108,6 +150,8 @@ class PiffBackupApp : Application(), Configuration.Provider {
             mediaSource = AndroidMediaStoreSource(applicationContext),
             fileLists = adoptionFileLists,
             allFiles = allFilesMetadataPlanner,
+            selection = backupPreferences::selection,
+            selectionMutex = selectionMutex,
         )
     }
 
@@ -118,6 +162,7 @@ class PiffBackupApp : Application(), Configuration.Provider {
             durableBackup = durableBackupStore,
             credentials = onboardingCredentials,
             knownHosts = knownHostStore,
+            allowedRoots = liveStorageRoots,
         )
     }
 
@@ -135,20 +180,29 @@ class PiffBackupApp : Application(), Configuration.Provider {
                 source = mediaSource,
                 store = adoptionFileLists,
                 volumeRoot = Environment.getExternalStorageDirectory(),
+            selection = backupPreferences::selection,
+            allowedRoots = liveStorageRoots,
             ),
             allFiles = allFilesMetadataPlanner,
             credentials = onboardingCredentials,
             knownHosts = knownHostStore,
             rsync = NativeAdoptionRsyncExecutor(applicationContext),
+            selectionMutex = selectionMutex,
         )
     }
 
     override fun onCreate() {
         super.onCreate()
-        runCatching { credentialVault.cleanupAbandonedTemporaryKeys() }
-        runCatching { onboardingCredentials.cleanupAbandonedGeneratedKeys() }
-        runCatching { kotlinx.coroutines.runBlocking { durableBackupStore.recoverOnLaunch() } }
-        runCatching { kotlinx.coroutines.runBlocking { durableBackupStore.cleanupOrphanedFileLists() } }
+        initialization = applicationScope.async {
+            credentialVault.cleanupAbandonedTemporaryKeys()
+            onboardingCredentials.cleanupAbandonedGeneratedKeys()
+            database.dao().selectionPolicy("primary")?.let(backupPreferences::activateSelection)
+            database.dao().recoverOperations()
+            encryptedArchives.cleanupAbandoned()
+            durableBackupStore.recoverOnLaunch()
+            durableBackupStore.cleanupSucceededJobs()
+            durableBackupStore.cleanupOrphanedFileLists()
+        }
         BackupNotifications.createChannel(this)
         DynamicColors.applyToActivitiesIfAvailable(this)
     }

@@ -44,6 +44,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
     buildFeatures {
         viewBinding = true
         buildConfig = true
@@ -58,7 +59,7 @@ android {
     }
     defaultConfig {
         ndk {
-            abiFilters += "arm64-v8a"
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
         }
     }
 }

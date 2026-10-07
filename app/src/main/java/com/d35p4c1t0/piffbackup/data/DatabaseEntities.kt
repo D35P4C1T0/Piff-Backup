@@ -18,6 +18,7 @@ data class StorageBoxProfileEntity(
     val configurationRevision: Long,
     val createdAtEpochMillis: Long,
     val updatedAtEpochMillis: Long,
+    @androidx.room3.ColumnInfo(defaultValue = "'HETZNER'") val provider: String = "HETZNER",
 )
 
 @Entity(
@@ -102,6 +103,7 @@ data class PendingBackupJobEntity(
     val createdAtEpochMillis: Long,
     val updatedAtEpochMillis: Long,
     val sanitizedErrorCode: String?,
+    @androidx.room3.ColumnInfo(defaultValue = "0") val attempts: Int = 0,
 )
 
 @Entity(
@@ -132,6 +134,8 @@ data class PendingRootWorkEntity(
     val rsyncExitCode: Int?,
     val sanitizedErrorCode: String?,
     val updatedAtEpochMillis: Long,
+    @androidx.room3.ColumnInfo(defaultValue = "0") val uploadedFiles: Long = 0L,
+    @androidx.room3.ColumnInfo(defaultValue = "0") val uploadedBytes: Long = 0L,
 )
 
 @Entity(
@@ -188,12 +192,14 @@ object MappingModeValue {
 
 object PendingJobStatusValue {
     const val PLANNED = "PLANNED"
+    const val QUEUED = "QUEUED"
     const val RUNNING = "RUNNING"
     const val PAUSED = "PAUSED"
     const val RETRYABLE = "RETRYABLE"
     const val SUCCEEDED = "SUCCEEDED"
     const val FAILED = "FAILED"
     const val NEEDS_RECONCILIATION = "NEEDS_RECONCILIATION"
+    const val SUPERSEDED = "SUPERSEDED"
 }
 
 object PendingRootStatusValue {
@@ -208,3 +214,13 @@ object BackupRunResultValue {
     const val SUCCEEDED = "SUCCEEDED"
     const val FAILED = "FAILED"
 }
+
+@Entity(tableName = "backup_health", foreignKeys = [ForeignKey(
+    entity = StorageBoxProfileEntity::class, parentColumns = ["id"], childColumns = ["profileId"],
+    onDelete = ForeignKey.CASCADE)])
+data class BackupHealthEntity(
+    @androidx.room3.PrimaryKey val profileId: String,
+    val lastCheckedAtEpochMillis: Long?,
+    val lastVerifiedAtEpochMillis: Long?,
+    val verificationScope: String?,
+)

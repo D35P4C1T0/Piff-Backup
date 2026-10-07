@@ -44,12 +44,13 @@ class HetznerOnboardingCoordinator(
         try {
             onProgress(OnboardingProgress.PREPARING_KEY)
             val existing = profiles.profile(request.profileId)
-            val credential = credentials.ensure(request.profileId, existing?.encryptedCredentialRef)
+            val credential = credentials.ensure(if (request.rotateClientKey) "device-${java.util.UUID.randomUUID()}" else request.profileId,
+                if (request.rotateClientKey) null else existing?.encryptedCredentialRef)
             val expectedPin = existing
                 ?.takeIf {
                     it.hostname == request.endpoint.hostname &&
                         it.port == request.endpoint.port &&
-                        it.pinnedHostKey != null
+                        it.pinnedHostKey != null && !request.allowHostKeyRotation
                 }
                 ?.pinnedHostKey
                 ?.let { persistedPin ->
@@ -65,8 +66,10 @@ class HetznerOnboardingCoordinator(
                 publicKeyLine = credential.publicKeyLine,
                 expectedPin = expectedPin,
                 onProgress = onProgress,
+                expectedFingerprint = request.expectedFingerprint,
             )
-            val sshHome = knownHosts.write(request.profileId, request.endpoint.hostname, capturedPin)
+            val enrollmentId = "enrollment-${java.util.UUID.randomUUID()}"
+            val sshHome = knownHosts.write(enrollmentId, request.endpoint.hostname, capturedPin)
             onProgress(OnboardingProgress.VERIFYING_KEY)
             val verification = credentials.withPrivateKey(credential.reference) { privateKey ->
                 destinationVerifier.verifyAuthentication(request.endpoint, privateKey, sshHome)
@@ -88,6 +91,7 @@ class HetznerOnboardingCoordinator(
                 hostFingerprint = capturedPin.sha256Fingerprint,
                 credentialReference = credential.reference,
                 pinnedHostKey = capturedPin.persistedValue,
+                enrollmentId = enrollmentId,
             )
             pendingConnection = connection
             return OnboardingResult.Connected(connection)
@@ -107,7 +111,9 @@ class HetznerOnboardingCoordinator(
         val connection = pendingConnection
             ?: return OnboardingResult.Failure(OnboardingErrorCode.SECURE_STORAGE_FAILED)
         return try {
-            requireValidStorageBoxBackupRoot(remoteBasePath)
+            if (connection.endpoint.provider == com.d35p4c1t0.piffbackup.transport.RsyncTargetProvider.HETZNER) {
+                requireValidStorageBoxBackupRoot(remoteBasePath)
+            }
             onProgress(OnboardingProgress.VERIFYING_DESTINATION)
             val verification = credentials.withPrivateKey(connection.credentialReference) { privateKey ->
                 destinationVerifier.verify(
@@ -115,7 +121,7 @@ class HetznerOnboardingCoordinator(
                     remoteBasePath,
                     privateKey,
                     knownHosts.write(
-                        connection.profileId,
+                        connection.enrollmentId,
                         connection.endpoint.hostname,
                         HostKeyPin.parse(connection.pinnedHostKey),
                     ),
@@ -133,6 +139,7 @@ class HetznerOnboardingCoordinator(
             val pin = HostKeyPin.parse(connection.pinnedHostKey)
             onProgress(OnboardingProgress.SAVING)
             profiles.save(profileInput(connection, remoteBasePath, pin))
+            knownHosts.write(connection.profileId, connection.endpoint.hostname, pin)
             pendingConnection = null
             OnboardingResult.Success(
                 endpoint = connection.endpoint,
@@ -161,5 +168,6 @@ class HetznerOnboardingCoordinator(
         encryptedCredentialRef = connection.credentialReference,
         pinnedHostKey = pin.persistedValue,
         setupCompleted = true,
+        provider = connection.endpoint.provider.id,
     )
 }

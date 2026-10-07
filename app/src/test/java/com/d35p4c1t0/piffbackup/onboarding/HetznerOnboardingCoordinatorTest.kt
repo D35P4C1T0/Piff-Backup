@@ -179,6 +179,7 @@ class HetznerOnboardingCoordinatorTest {
             publicKeyLine: String,
             expectedPin: HostKeyPin?,
             onProgress: (OnboardingProgress) -> Unit,
+            expectedFingerprint: String?,
         ): HostKeyPin {
             called = true
             this.expectedPin = expectedPin

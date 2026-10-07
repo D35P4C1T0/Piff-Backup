@@ -9,7 +9,7 @@ class RsyncCommandEngineTest {
     @Test
     fun `preview summary streams beyond bounded diagnostic capture`() {
         val records = List(100) {
-            "${RsyncCommandBuilder.ITEM_RECORD_PREFIX}<f+++++++++:5:file-$it.jpg"
+            "${RsyncCommandBuilder.ITEM_RECORD_PREFIX}<f+++++++++:5:5:file-$it.jpg"
         }.joinToString("\n")
         val command = RsyncCommand(
             arguments = listOf("/usr/bin/printf", "%s", records),
@@ -33,7 +33,7 @@ class RsyncCommandEngineTest {
     @Test
     fun `transfer file events stream independently from progress`() {
         val records = buildString {
-            append("${RsyncCommandBuilder.ITEM_RECORD_PREFIX}<f+++++++++:5:Camera/photo.jpg\n")
+            append("${RsyncCommandBuilder.ITEM_RECORD_PREFIX}<f+++++++++:5:5:Camera/photo.jpg\n")
             append("  5 100%  1.00MB/s 0:00:01\r")
         }
         val observedFiles = mutableListOf<String>()

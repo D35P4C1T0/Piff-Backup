@@ -16,8 +16,13 @@ import kotlinx.coroutines.Dispatchers
         PendingRootWorkEntity::class,
         BackupRunEntity::class,
         LocalFileMetadataEntity::class,
+        BackupHealthEntity::class,
+        FolderHealthEntity::class,
+        BackupSelectionEntity::class,
+        RemoteOperationEntity::class,
     ],
-    version = 1,
+    version = 2,
+    autoMigrations = [androidx.room3.AutoMigration(from = 1, to = 2)],
     exportSchema = true,
 )
 abstract class PiffBackupDatabase : RoomDatabase() {
@@ -25,7 +30,7 @@ abstract class PiffBackupDatabase : RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME = "piffbackup.db"
-        const val SCHEMA_VERSION = 1
+        const val SCHEMA_VERSION = 2
 
         fun open(context: Context, name: String = DATABASE_NAME): PiffBackupDatabase =
             Room.databaseBuilder(context, PiffBackupDatabase::class.java, name)

@@ -20,6 +20,7 @@ data class LocalMetadataRecord(
     val relativePath: String,
     val sizeBytes: Long,
     val modifiedAtEpochMillis: Long,
+    val sha256: String? = null,
 )
 
 /** App-private, atomic sidecar used to advance metadata only after its rsync root succeeds. */
@@ -46,13 +47,32 @@ class AllFilesMetadataSnapshotStore(rootDirectory: File) {
     ) {
         require(batchSize in 1..MAX_BATCH_SIZE) { "Invalid metadata batch size" }
         val file = requireValid(fileListPath)
-        DataInputStream(BufferedInputStream(FileInputStream(file))).use { input ->
-            require(input.readInt() == MAGIC) { "Invalid metadata snapshot header" }
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        val digestInput = java.security.DigestInputStream(BufferedInputStream(FileInputStream(file)), digest)
+        DataInputStream(digestInput).use { input ->
+            val magic = input.readInt()
+            require(magic == MAGIC || magic == FOOTER_MAGIC || magic == LEGACY_MAGIC) { "Invalid metadata snapshot header" }
+            var count = 0L
             val batch = ArrayList<LocalMetadataRecord>(batchSize)
             while (true) {
-                val pathLength = try {
-                    input.readInt()
-                } catch (_: EOFException) {
+                val first = input.read()
+                if (first == -1) {
+                    require(magic == LEGACY_MAGIC) { "Missing metadata footer" }
+                    break
+                }
+                val pathLength = (first shl 24) or (input.readUnsignedByte() shl 16) or
+                    (input.readUnsignedByte() shl 8) or input.readUnsignedByte()
+                if (pathLength == -1 && magic != LEGACY_MAGIC) {
+                    val actualDigest = digest.digest()
+                    digestInput.on(false)
+                    require(input.readLong() == count) { "Metadata record count mismatch" }
+                    val expectedDigest = ByteArray(32).also { input.readFully(it) }
+                    require(java.security.MessageDigest.isEqual(expectedDigest, actualDigest)) { "Metadata checksum mismatch" }
+                    if (magic == MAGIC) {
+                        val expectedList = ByteArray(32).also { input.readFully(it) }
+                        require(java.security.MessageDigest.isEqual(expectedList, fileListHash(File(fileListPath)))) { "File list checksum mismatch" }
+                    }
+                    require(input.read() == -1) { "Trailing metadata bytes" }
                     break
                 }
                 require(pathLength in 1..MAX_PATH_BYTES) { "Invalid metadata path length" }
@@ -64,7 +84,10 @@ class AllFilesMetadataSnapshotStore(rootDirectory: File) {
                 val sizeBytes = input.readLong()
                 val modifiedAt = input.readLong()
                 require(sizeBytes >= 0L && modifiedAt >= 0L) { "Invalid local metadata" }
-                batch += LocalMetadataRecord(relativePath, sizeBytes, modifiedAt)
+                val hash = if (magic == MAGIC && input.readBoolean()) ByteArray(32).also { input.readFully(it) }
+                    .joinToString("") { "%02x".format(it) } else null
+                count++
+                batch += LocalMetadataRecord(relativePath, sizeBytes, modifiedAt, hash)
                 if (batch.size == batchSize) {
                     consumer(batch.toList())
                     batch.clear()
@@ -75,9 +98,7 @@ class AllFilesMetadataSnapshotStore(rootDirectory: File) {
     }
 
     fun isValid(fileListPath: String): Boolean = runCatching {
-        DataInputStream(BufferedInputStream(FileInputStream(requireValid(fileListPath)))).use { input ->
-            require(input.readInt() == MAGIC) { "Invalid metadata snapshot header" }
-        }
+        kotlinx.coroutines.runBlocking { forEachBatch(fileListPath) {} }
     }.isSuccess
 
     fun delete(fileListPath: String): Boolean {
@@ -112,7 +133,9 @@ class AllFilesMetadataSnapshotStore(rootDirectory: File) {
 
     companion object {
         const val METADATA_SUFFIX = ".metadata"
-        private const val MAGIC = 0x50424D31
+        private const val LEGACY_MAGIC = 0x50424D31
+        private const val FOOTER_MAGIC = 0x50424D32
+        private const val MAGIC = 0x50424D33
         private const val DEFAULT_BATCH_SIZE = 256
         private const val MAX_BATCH_SIZE = 1_000
         private const val MAX_PATH_BYTES = 64 * 1024
@@ -126,7 +149,10 @@ class LocalMetadataSnapshotWriter internal constructor(
     val file: File,
 ) : Closeable {
     private val fileOutput = FileOutputStream(temporary, false)
-    private val output = DataOutputStream(BufferedOutputStream(fileOutput))
+    private val digest = java.security.MessageDigest.getInstance("SHA-256")
+    private val digestOutput = java.security.DigestOutputStream(fileOutput, digest)
+    private val output = DataOutputStream(BufferedOutputStream(digestOutput))
+    private var count = 0L
     private var closed = false
 
     init {
@@ -144,6 +170,12 @@ class LocalMetadataSnapshotWriter internal constructor(
         output.write(bytes)
         output.writeLong(record.sizeBytes)
         output.writeLong(record.modifiedAtEpochMillis)
+        output.writeBoolean(record.sha256 != null)
+        record.sha256?.let { hash ->
+            require(Regex("[0-9a-f]{64}").matches(hash))
+            output.write(hash.chunked(2).map { it.toInt(16).toByte() }.toByteArray())
+        }
+        count++
     }
 
     @Synchronized
@@ -151,6 +183,13 @@ class LocalMetadataSnapshotWriter internal constructor(
         if (closed) return
         closed = true
         try {
+            output.writeInt(-1)
+            output.flush()
+            val checksum = digest.digest()
+            digestOutput.on(false)
+            output.writeLong(count)
+            output.write(checksum)
+            output.write(fileListHash(File(file.parentFile, file.name.removeSuffix(AllFilesMetadataSnapshotStore.METADATA_SUFFIX))))
             output.flush()
             fileOutput.fd.sync()
             output.close()
@@ -179,4 +218,15 @@ class LocalMetadataSnapshotWriter internal constructor(
         temporary.delete()
         file.delete()
     }
+}
+
+private fun fileListHash(file: File): ByteArray {
+    val digest = java.security.MessageDigest.getInstance("SHA-256")
+    java.security.DigestInputStream(file.inputStream().buffered(),digest).use { input ->
+        val bytes = ByteArray(65536)
+        while (input.read(bytes) >= 0) {
+            if (Thread.currentThread().isInterrupted) throw InterruptedException()
+        }
+    }
+    return digest.digest()
 }

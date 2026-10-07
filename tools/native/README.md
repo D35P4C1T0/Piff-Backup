@@ -1,6 +1,6 @@
 # Native tools
 
-These scripts pin and cross-compile the following executables for Android `arm64-v8a`:
+These scripts pin and cross-compile the following executables for Android `arm64-v8a`, `armeabi-v7a`, `x86_64`, and `x86`:
 
 - rsync 3.4.2
 - Dropbear 2025.89: `dbclient`, `dropbearkey`, and `dropbearconvert`
@@ -27,8 +27,9 @@ toolchain. Linux x86_64 is also supported. Override `ANDROID_NDK_ROOT` when the
 NDK is outside the Android SDK.
 
 Outputs use native-library-compatible names beneath
-`app/src/main/jniLibs/arm64-v8a`. The scripts verify that every result is an
-AArch64 ELF64 position-independent executable using Android's 64-bit linker.
+`app/src/main/jniLibs/<ABI>`. The scripts check each ABI's ELF class, machine,
+position-independent executable type, and Android linker. Set `PIFFBACKUP_ABIS`
+to a space-separated subset to build only selected architectures.
 
 The APK deliberately uses legacy JNI-library packaging so Package Manager
 extracts these files into `ApplicationInfo.nativeLibraryDir`. The app resolves
@@ -45,4 +46,4 @@ Remote device verification must use a dedicated disposable server path such as
 `.piffbackup-test/<random-id>/`, never user media. A host key must already be in
 the app-private `HOME/.ssh/known_hosts`; `StrictHostKeyChecking=yes` is mandatory.
 The Android instrumentation suite also verifies that the packaged executables
-launch from `ApplicationInfo.nativeLibraryDir` on a supported ARM64 device.
+launch from `ApplicationInfo.nativeLibraryDir` on a supported Android device.

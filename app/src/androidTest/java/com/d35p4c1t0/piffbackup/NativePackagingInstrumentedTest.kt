@@ -19,7 +19,7 @@ import java.io.File
 @RunWith(AndroidJUnit4::class)
 class NativePackagingInstrumentedTest {
     @Test
-    fun packagedArm64ToolsExecuteFromNativeLibraryDirectory() {
+    fun packagedToolsExecuteFromNativeLibraryDirectory() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val locator = NativeToolLocator(context)
 

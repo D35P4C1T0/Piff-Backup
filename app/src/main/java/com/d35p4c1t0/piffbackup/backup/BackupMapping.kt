@@ -10,6 +10,14 @@ class CanonicalLocalRoot private constructor(
 
     companion object {
         @Throws(IOException::class)
+        fun create(rawPath: String, allowedSharedStorageRoots: List<File>): CanonicalLocalRoot {
+            require(allowedSharedStorageRoots.isNotEmpty())
+            val root = allowedSharedStorageRoots.firstOrNull { allowed ->
+                File(rawPath).canonicalFile.toPath().startsWith(allowed.canonicalFile.toPath())
+            } ?: throw IllegalArgumentException("Local root must remain inside selected shared storage")
+            return create(rawPath, root)
+        }
+
         fun create(rawPath: String, allowedSharedStorageRoot: File): CanonicalLocalRoot {
             require(rawPath.isNotBlank()) { "Local root must not be blank" }
             require('\u0000' !in rawPath) { "Local root must not contain NUL" }
@@ -19,6 +27,11 @@ class CanonicalLocalRoot private constructor(
             val candidate = rawCandidate.canonicalFile
             require(candidate.toPath().startsWith(allowed.toPath())) {
                 "Local root must remain inside shared storage"
+            }
+            val components = allowed.toPath().relativize(candidate.toPath()).map { it.toString() }
+            require(components.size < 2 || !components[0].equals("Android", true) ||
+                !(components[1].equals("data", true) || components[1].equals("obb", true))) {
+                "Android app-private folders cannot be backed up"
             }
             return CanonicalLocalRoot(candidate)
         }

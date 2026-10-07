@@ -145,6 +145,16 @@ class RoomDurabilityInstrumentedTest {
         }
     }
 
+    @Test fun selectionPolicyAndInvalidatedCheckpointSurviveReopenTogether() = withFixture { fixture ->
+        val before = requireNotNull(fixture.configuration.profile(PROFILE_ID)).configurationRevision
+        fixture.configuration.updateSelectionPolicy(com.d35p4c1t0.piffbackup.data.BackupSelectionEntity(PROFILE_ID,"**/*.tmp",false))
+        fixture.reopenDatabase()
+        assertEquals("**/*.tmp",fixture.database.dao().selectionPolicy(PROFILE_ID)?.exclusions)
+        assertEquals(false,fixture.database.dao().selectionPolicy(PROFILE_ID)?.includeHidden)
+        assertEquals(before+1,fixture.configuration.profile(PROFILE_ID)?.configurationRevision)
+        assertEquals(null,fixture.store.checkpointForPlanning(PROFILE_ID,VOLUME))
+    }
+
     private class Fixture(
         private val context: Context,
     ) {

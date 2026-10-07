@@ -15,7 +15,12 @@ import java.io.File
 object StorageBoxVerificationCommands {
     val AUTHENTICATION_CHECK = listOf("pwd")
 
-    fun destinationCheck(remoteBasePath: RemoteRelativePath): List<String> {
+    fun destinationCheck(remoteBasePath: RemoteRelativePath,
+        provider: com.d35p4c1t0.piffbackup.transport.RsyncTargetProvider = com.d35p4c1t0.piffbackup.transport.RsyncTargetProvider.HETZNER): List<String> {
+        if (provider == com.d35p4c1t0.piffbackup.transport.RsyncTargetProvider.SSH_RSYNC) {
+            val quoted = "'" + remoteBasePath.value.replace("'", "'\"'\"'") + "'"
+            return listOf("test -d $quoted")
+        }
         requireValidStorageBoxBackupRoot(remoteBasePath)
         return listOf(
             "ls",
@@ -77,7 +82,7 @@ class NativeStorageBoxDestinationVerifier(
         val authentication = verifyAuthentication(endpoint, privateKey, sshHomeDirectory)
         if (authentication != DestinationVerification.VERIFIED) return authentication
         val config = strictConfig(endpoint, privateKey, sshHomeDirectory)
-        val destination = run(config, StorageBoxVerificationCommands.destinationCheck(remoteBasePath))
+        val destination = run(config, StorageBoxVerificationCommands.destinationCheck(remoteBasePath, endpoint.provider))
         if (destination.timedOut) return DestinationVerification.TIMED_OUT
         if (destination.exitCode != 0 || destination.cancelled) {
             logSafeFailure("destination", destination, config)

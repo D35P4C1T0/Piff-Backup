@@ -7,17 +7,17 @@ ARCHIVE="dropbear-$DROPBEAR_VERSION.tar.bz2"
 download_and_verify "$ARCHIVE" "https://dropbear.nl/mirror/releases/$ARCHIVE"
 configure_toolchain
 
-source_dir="$BUILD_DIR/dropbear-$DROPBEAR_VERSION"
+source_dir="$BUILD_DIR/$NATIVE_ABI/dropbear-$DROPBEAR_VERSION"
 rm -rf "$source_dir"
-mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
-tar -xjf "$DOWNLOAD_DIR/$ARCHIVE" -C "$BUILD_DIR"
+mkdir -p "$BUILD_DIR/$NATIVE_ABI" "$OUTPUT_DIR"
+tar -xjf "$DOWNLOAD_DIR/$ARCHIVE" -C "$BUILD_DIR/$NATIVE_ABI"
 
 cd "$source_dir"
 patch -p1 < "$NATIVE_DIR/dropbear-rsa-hostkey-first.patch"
 build_triplet=$(sh ./src/config.guess)
 ./configure \
     --build="$build_triplet" \
-    --host=aarch64-linux-android \
+    --host="$TARGET_TRIPLET" \
     --disable-zlib \
     --disable-syslog \
     --disable-shadow \

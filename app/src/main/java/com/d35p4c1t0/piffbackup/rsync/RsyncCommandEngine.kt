@@ -7,6 +7,8 @@ data class RsyncExecutionResult(
     val exitKind: RsyncExitKind,
     val latestProgress: RsyncProgress?,
     val adoptionPreviewSummary: AdoptionPreviewSummary?,
+    val transferredFiles: Long = 0L,
+    val transferredBytes: Long = 0L,
 )
 
 class RsyncCommandEngine(
@@ -58,9 +60,11 @@ class RunningRsyncCommand internal constructor(
         previewTracker?.finish()
         return RsyncExecutionResult(
             process = result,
-            exitKind = RsyncExitClassifier.classify(result.exitCode, result.cancelled),
+            exitKind = if (result.timedOut) RsyncExitKind.IO_TIMEOUT else RsyncExitClassifier.classify(result.exitCode, result.cancelled),
             latestProgress = progressTracker.latest ?: RsyncOutputParser.parseLatestProgress(result.stdout),
             adoptionPreviewSummary = previewTracker?.summary(),
+            transferredFiles = fileTracker?.transferredFiles ?: 0L,
+            transferredBytes = fileTracker?.transferredBytes ?: 0L,
         )
     }
 }
@@ -68,6 +72,10 @@ class RunningRsyncCommand internal constructor(
 internal class RsyncFileTracker(
     private val observer: (String) -> Unit,
 ) {
+    var transferredFiles = 0L
+        private set
+    var transferredBytes = 0L
+        private set
     private val pending = StringBuilder()
 
     @Synchronized
@@ -88,7 +96,11 @@ internal class RsyncFileTracker(
         if (pending.isEmpty()) return
         val record = pending.toString()
         pending.setLength(0)
-        val fileName = runCatching { RsyncOutputParser.parseTransferFileName(record) }.getOrNull() ?: return
+        val item = runCatching { RsyncOutputParser.parseAdoptionItemRecord(record) }.getOrNull() ?: return
+        if (!item.requiresUpload) return
+        transferredFiles++
+        transferredBytes = Math.addExact(transferredBytes, item.length)
+        val fileName = item.fileName
         try {
             observer(fileName)
         } catch (_: RuntimeException) {

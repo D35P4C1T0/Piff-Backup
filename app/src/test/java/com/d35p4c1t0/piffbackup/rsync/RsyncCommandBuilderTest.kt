@@ -38,7 +38,7 @@ class RsyncCommandBuilderTest {
 
         assertTrue("--dry-run" in command.arguments)
         assertTrue("--size-only" in command.arguments)
-        assertTrue("--whole-file" in command.arguments)
+        assertTrue("--no-whole-file" in command.arguments)
         assertTrue("--protect-args" in command.arguments)
         assertEquals(2, command.arguments.count { it == "--itemize-changes" })
         assertFalse(command.arguments.any { it == "--delete" || it.startsWith("--delete-") })
@@ -50,6 +50,14 @@ class RsyncCommandBuilderTest {
             command.arguments.last(),
         )
         assertEquals("C", command.environment["LC_ALL"])
+    }
+
+    @Test
+    fun `reconciliation compares content while initial adoption preserves explicit size policy`() {
+        val command = builder.adoptionPreview(mapping, ssh, comparison = RsyncComparisonPolicy.CONTENT)
+        assertTrue("--checksum" in command.arguments)
+        assertFalse("--size-only" in command.arguments)
+        assertFalse(command.arguments.any { it.startsWith("--delete") })
     }
 
     @Test
@@ -109,10 +117,10 @@ class RsyncCommandBuilderTest {
 
         assertTrue("--from0" in command.arguments)
         assertTrue("--files-from=${fileList.path}" in command.arguments)
-        assertTrue("--whole-file" in command.arguments)
+        assertTrue("--no-whole-file" in command.arguments)
         assertFalse("--size-only" in command.arguments)
         assertFalse("--dry-run" in command.arguments)
-        assertFalse("--checksum" in command.arguments)
+        assertTrue("--checksum" in command.arguments)
         assertFalse(command.arguments.any { it == "--delete" || it.startsWith("--delete-") })
         assertEquals(RsyncOutputKind.INCREMENTAL_TRANSFER, command.outputKind)
         assertEquals(mapping.localRoot.pathWithTrailingSlash, command.arguments[command.arguments.lastIndex - 1])

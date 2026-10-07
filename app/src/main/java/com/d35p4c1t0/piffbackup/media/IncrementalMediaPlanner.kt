@@ -56,6 +56,7 @@ class IncrementalMediaPlanner(
     private val source: MediaStoreSource,
     private val fileListStore: IncrementalFileListStore,
     private val requiredRemoteBase: RemoteRelativePath,
+    private val selection: com.d35p4c1t0.piffbackup.backup.FileSelectionPolicy = com.d35p4c1t0.piffbackup.backup.FileSelectionPolicy(),
 ) {
     fun plan(
         volumeName: String,
@@ -91,6 +92,7 @@ class IncrementalMediaPlanner(
                 var matchedPath: RelativeFileListPath? = null
                 mappings.forEachIndexed { index, mapping ->
                     val relativePath = mapping.relativeFilePath(row) ?: return@forEachIndexed
+                    if (!selection.includes(relativePath.value)) return@forEachIndexed
                     require(matchedIndex == null) { "A MediaStore row matched overlapping mappings" }
                     matchedIndex = index
                     matchedPath = relativePath

@@ -7,17 +7,17 @@ ARCHIVE="rsync-$RSYNC_VERSION.tar.gz"
 download_and_verify "$ARCHIVE" "https://download.samba.org/pub/rsync/src/$ARCHIVE"
 configure_toolchain
 
-source_dir="$BUILD_DIR/rsync-$RSYNC_VERSION"
+source_dir="$BUILD_DIR/$NATIVE_ABI/rsync-$RSYNC_VERSION"
 rm -rf "$source_dir"
-mkdir -p "$BUILD_DIR" "$OUTPUT_DIR"
-tar -xzf "$DOWNLOAD_DIR/$ARCHIVE" -C "$BUILD_DIR"
+mkdir -p "$BUILD_DIR/$NATIVE_ABI" "$OUTPUT_DIR"
+tar -xzf "$DOWNLOAD_DIR/$ARCHIVE" -C "$BUILD_DIR/$NATIVE_ABI"
 
 cd "$source_dir"
 build_triplet=$(sh ./config.guess)
 ac_cv_func_getpass=no \
     ./configure \
     --build="$build_triplet" \
-    --host=aarch64-linux-android \
+    --host="$TARGET_TRIPLET" \
     --with-included-popt \
     --disable-openssl \
     --disable-xxhash \

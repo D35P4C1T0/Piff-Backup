@@ -8,8 +8,9 @@ data class AdoptionPreviewSummary(
 
 object RsyncOutputParser {
     private val itemRecord = Regex(
-        "^${Regex.escape(RsyncCommandBuilder.ITEM_RECORD_PREFIX)}(.{11}):([0-9]+):(.*)\\r?$",
+        "^${Regex.escape(RsyncCommandBuilder.ITEM_RECORD_PREFIX)}(.{11}):([0-9]+):([0-9]+):(.*)\\r?$",
     )
+    private val legacyItemRecord = Regex("^PIFFBACKUP-ITEM:(.{11}):([0-9]+):(.*)\\r?$")
     private val progressRecord = Regex(
         "^\\s*([0-9][0-9,]*)\\s+([0-9]{1,3})%\\s+.*$",
     )
@@ -35,12 +36,13 @@ object RsyncOutputParser {
     }
 
     internal fun parseAdoptionItemRecord(record: String): AdoptionItemRecord? {
-        val match = itemRecord.matchEntire(record) ?: return null
+        val modern = itemRecord.matchEntire(record)
+        val match = modern ?: legacyItemRecord.matchEntire(record) ?: return null
         val itemizedChange = match.groupValues[1]
         if (itemizedChange[1] != 'f') return null
         val length = match.groupValues[2].toLongOrNull()
             ?: throw IllegalArgumentException("Invalid rsync item length")
-        val fileName = match.groupValues[3]
+        val fileName = match.groupValues[if (modern != null) 4 else 3]
         require(fileName.isNotEmpty()) { "Missing rsync item name" }
         return AdoptionItemRecord(
             requiresUpload = itemizedChange[0] == '<' || itemizedChange[0] == '>',

@@ -5,7 +5,8 @@ NATIVE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PROJECT_DIR=$(CDPATH= cd -- "$NATIVE_DIR/../.." && pwd)
 DOWNLOAD_DIR=${PIFFBACKUP_DOWNLOAD_DIR:-"$NATIVE_DIR/downloads"}
 BUILD_DIR=${PIFFBACKUP_BUILD_DIR:-"$NATIVE_DIR/.build"}
-OUTPUT_DIR=${PIFFBACKUP_OUTPUT_DIR:-"$PROJECT_DIR/app/src/main/jniLibs/arm64-v8a"}
+NATIVE_ABI=${PIFFBACKUP_ABI:-arm64-v8a}
+OUTPUT_DIR=${PIFFBACKUP_OUTPUT_DIR:-"$PROJECT_DIR/app/src/main/jniLibs/$NATIVE_ABI"}
 ANDROID_API=33
 NDK_VERSION=28.2.13676358
 
@@ -35,12 +36,20 @@ configure_toolchain() {
         *) printf '%s\n' "Unsupported build host: $(uname -s)" >&2; exit 1 ;;
     esac
     TOOLCHAIN="$NDK_DIR/toolchains/llvm/prebuilt/$host_tag"
-    if [ ! -x "$TOOLCHAIN/bin/aarch64-linux-android${ANDROID_API}-clang" ]; then
+    case "$NATIVE_ABI" in
+        arm64-v8a) compiler=aarch64-linux-android; TARGET_TRIPLET=aarch64-linux-android; ELF_CLASS=ELF64; ELF_MACHINE=AArch64; LINKER=linker64 ;;
+        armeabi-v7a) compiler=armv7a-linux-androideabi; TARGET_TRIPLET=arm-linux-androideabi; ELF_CLASS=ELF32; ELF_MACHINE=ARM; LINKER=linker ;;
+        x86_64) compiler=x86_64-linux-android; TARGET_TRIPLET=x86_64-linux-android; ELF_CLASS=ELF64; ELF_MACHINE='Advanced Micro Devices X86-64'; LINKER=linker64 ;;
+        x86) compiler=i686-linux-android; TARGET_TRIPLET=i686-linux-android; ELF_CLASS=ELF32; ELF_MACHINE='Intel 80386'; LINKER=linker ;;
+        *) printf '%s\n' "Unsupported ABI: $NATIVE_ABI" >&2; exit 1 ;;
+    esac
+    export TARGET_TRIPLET ELF_CLASS ELF_MACHINE LINKER
+    if [ ! -x "$TOOLCHAIN/bin/${compiler}${ANDROID_API}-clang" ]; then
         printf '%s\n' "NDK compiler not found under $TOOLCHAIN" >&2
         exit 1
     fi
     export NDK_DIR TOOLCHAIN
-    export CC="$TOOLCHAIN/bin/aarch64-linux-android${ANDROID_API}-clang"
+    export CC="$TOOLCHAIN/bin/${compiler}${ANDROID_API}-clang"
     export AR="$TOOLCHAIN/bin/llvm-ar"
     export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
     export STRIP="$TOOLCHAIN/bin/llvm-strip"
@@ -68,8 +77,8 @@ download_and_verify() {
 
 verify_android_executable() {
     executable=$1
-    "$READELF" -h "$executable" | grep -q 'Class:.*ELF64'
+    "$READELF" -h "$executable" | grep -q "Class:.*$ELF_CLASS"
     "$READELF" -h "$executable" | grep -q 'Type:.*DYN'
-    "$READELF" -h "$executable" | grep -q 'Machine:.*AArch64'
-    "$READELF" -l "$executable" | grep -q 'Requesting program interpreter: /system/bin/linker64'
+    "$READELF" -h "$executable" | grep -q "Machine:.*$ELF_MACHINE"
+    "$READELF" -l "$executable" | grep -q "Requesting program interpreter: /system/bin/$LINKER]"
 }

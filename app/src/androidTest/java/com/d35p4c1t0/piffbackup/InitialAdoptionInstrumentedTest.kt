@@ -246,6 +246,7 @@ class InitialAdoptionInstrumentedTest {
         )
 
         suspend fun initialize() {
+            File(camera, "photo.jpg").writeText("12345")
             configuration.saveProfile(
                 StorageBoxProfileInput(
                     id = PROFILE_ID,

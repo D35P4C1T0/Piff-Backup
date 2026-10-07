@@ -23,6 +23,7 @@ interface PasswordKeyInstaller {
         publicKeyLine: String,
         expectedPin: HostKeyPin?,
         onProgress: (OnboardingProgress) -> Unit,
+        expectedFingerprint: String? = null,
     ): HostKeyPin
 }
 
@@ -33,9 +34,14 @@ class SshjPasswordKeyInstaller : PasswordKeyInstaller {
         publicKeyLine: String,
         expectedPin: HostKeyPin?,
         onProgress: (OnboardingProgress) -> Unit,
+        expectedFingerprint: String?,
     ): HostKeyPin {
         validatePublicKey(publicKeyLine)
-        val verifier = PinningHostKeyVerifier(endpoint.hostname, endpoint.port, expectedPin)
+        if (expectedPin == null && expectedFingerprint == null) {
+            password.fill('\u0000')
+            throw OnboardingFailure(OnboardingErrorCode.HOST_KEY_CHANGED)
+        }
+        val verifier = PinningHostKeyVerifier(endpoint.hostname, endpoint.port, expectedPin, expectedFingerprint)
         var stage = BootstrapStage.CONNECT
         try {
             configureSshjSecurityProviders()
@@ -50,7 +56,7 @@ class SshjPasswordKeyInstaller : PasswordKeyInstaller {
                 stage = BootstrapStage.INSTALL_KEY
                 onProgress(OnboardingProgress.INSTALLING_KEY)
                 client.startSession().use { session ->
-                    val command = session.exec(INSTALL_COMMAND)
+                    val command = session.exec(endpoint.provider.installKeyCommand)
                     command.outputStream.use { output ->
                         output.write(publicKeyLine.toByteArray(StandardCharsets.US_ASCII))
                         output.flush()

@@ -67,10 +67,50 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  device-tests:
+    name: Device tests API ${{ matrix.api }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [33, 35]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools platforms;android-37.0 build-tools;36.0.0
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Execute local-only instrumentation
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          arch: x86_64
+          target: default
+          disable-animations: true
+          script: ./gradlew --no-daemon connectedDebugAndroidTest
+      - name: Upload device reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: device-tests-api-${{ matrix.api }}
+          path: app/build/reports/androidTests/connected/
+
   release:
     name: Publish tagged release
     if: startsWith(github.ref, 'refs/tags/')
-    needs: verify
+    needs: [verify, device-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -174,7 +214,7 @@ jobs:
           set -euo pipefail
           unsigned_apk="app/build/outputs/apk/release/app-release-unsigned.apk"
           release_dir="release"
-          release_name="PiffBackup-${PIFFBACKUP_VERSION_NAME}-arm64-v8a.apk"
+          release_name="PiffBackup-${PIFFBACKUP_VERSION_NAME}-universal.apk"
           apksigner_path="$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
           mkdir -p "$release_dir"
           test -x "$apksigner_path"

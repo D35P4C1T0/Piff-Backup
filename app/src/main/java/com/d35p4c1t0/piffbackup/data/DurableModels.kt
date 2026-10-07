@@ -27,6 +27,7 @@ data class StorageBoxProfileInput(
     val encryptedCredentialRef: String? = null,
     val pinnedHostKey: String? = null,
     val setupCompleted: Boolean = false,
+    val provider: String = "HETZNER",
 )
 
 data class FolderMappingInput(

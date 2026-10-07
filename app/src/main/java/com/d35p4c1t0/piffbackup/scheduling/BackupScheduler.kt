@@ -18,16 +18,22 @@ class BackupScheduler(
     private val context: Context,
     private val durableBackup: DurableBackupStore,
     private val executor: BackupExecutor,
+    private val preferences: com.d35p4c1t0.piffbackup.settings.BackupPreferences =
+        com.d35p4c1t0.piffbackup.settings.BackupPreferences(context),
 ) {
-    fun schedule(jobId: String, uploadBytes: Long): Boolean {
-        executor.clearStop(jobId)
-        return runCatching { if (Build.VERSION.SDK_INT >= 34) {
+    suspend fun schedule(jobId: String, uploadBytes: Long): Boolean {
+        if (jobId.startsWith("operation-")) {
+            (context.applicationContext as com.d35p4c1t0.piffbackup.PiffBackupApp).remoteOperations.clearStop(jobId)
+        } else executor.clearStop(jobId)
+        val scheduled = runCatching { if (Build.VERSION.SDK_INT >= 34) {
             val extras = PersistableBundle().apply { putString(JOB_ID_KEY, jobId) }
             val info = JobInfo.Builder(
                 NATIVE_JOB_ID,
                 ComponentName(context, PiffBackupJobService::class.java),
             )
-                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                .setRequiredNetworkType(if (preferences.unmetered) JobInfo.NETWORK_TYPE_UNMETERED else JobInfo.NETWORK_TYPE_ANY)
+                .setRequiresCharging(preferences.charging)
+                .setRequiresBatteryNotLow(preferences.batteryNotLow)
                 .setEstimatedNetworkBytes(0L, uploadBytes.coerceAtLeast(0L))
                 .setUserInitiated(true)
                 .setExtras(extras)
@@ -38,7 +44,9 @@ class BackupScheduler(
                 .setInputData(Data.Builder().putString(JOB_ID_KEY, jobId).build())
                 .setConstraints(
                     Constraints.Builder()
-                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .setRequiredNetworkType(if (preferences.unmetered) NetworkType.UNMETERED else NetworkType.CONNECTED)
+                        .setRequiresCharging(preferences.charging)
+                        .setRequiresBatteryNotLow(preferences.batteryNotLow)
                         .build(),
                 )
                 .build()
@@ -49,16 +57,29 @@ class BackupScheduler(
             )
             true
         } }.getOrDefault(false)
+        if (scheduled) {
+            if (jobId.startsWith("operation-")) {
+                val dao = (context.applicationContext as com.d35p4c1t0.piffbackup.PiffBackupApp).database.dao()
+                dao.operation(jobId)?.takeIf { it.status in setOf("PLANNED", "PAUSED") }?.let { dao.saveOperation(it.copy(status = "QUEUED")) }
+            } else durableBackup.markQueued(jobId)
+        }
+        return scheduled
     }
 
     suspend fun pause(jobId: String) {
-        executor.requestStop(jobId, explicitPause = true)
+        val operation = jobId.startsWith("operation-")
+        val app = context.applicationContext as com.d35p4c1t0.piffbackup.PiffBackupApp
+        if (operation) app.remoteOperations.stop(jobId) else executor.requestStop(jobId, explicitPause = true)
         if (Build.VERSION.SDK_INT >= 34) {
             context.getSystemService(JobScheduler::class.java).cancel(NATIVE_JOB_ID)
         } else {
             WorkManager.getInstance(context).cancelUniqueWork(UNIQUE_WORK_NAME)
         }
-        durableBackup.markJobPaused(jobId)
+        if (operation) app.remoteOperations.pause(jobId) else {
+            executor.awaitStopped()
+            durableBackup.markInterrupted(jobId, paused = true)
+            durableBackup.markJobPaused(jobId)
+        }
     }
 
     companion object {

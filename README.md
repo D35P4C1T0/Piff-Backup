@@ -5,7 +5,7 @@
 <h1 align="center">PiffBackup</h1>
 
 <p align="center">
-  A focused, non-destructive Android backup client for a private Hetzner Storage Box.
+  An Android backup and restore client for private SSH/rsync storage.
 </p>
 
 PiffBackup backs up selected folders from an Android device while preserving their
@@ -13,12 +13,12 @@ relative directory structure. It can adopt an existing remote collection, upload
 only new or changed files on later runs, and safely pause and resume background
 work.
 
-The current release is intentionally narrow: Android 13 or newer, ARM64 devices,
-and Hetzner Storage Box accounts using SSH/rsync. It is designed for direct APK
+Android 13 or newer is supported on ARM64, ARMv7, x86_64, and x86 devices.
+Targets include Hetzner Storage Box and SSH/rsync servers such as compatible NAS devices. It is designed for direct APK
 installation rather than Google Play distribution.
 
 <p align="center">
-  <img src="docs/images/home-dark.webp" width="320" alt="PiffBackup home screen in Android dark mode">
+  <img src="docs/images/home-reviewed.png" width="320" alt="PiffBackup home screen with historical backup coverage">
 </p>
 
 ## Highlights
@@ -34,11 +34,17 @@ installation rather than Google Play distribution.
   and Android Keystore-backed credential protection.
 - Material 3 UI with dark mode, Android themed icons, accessibility semantics,
   and English and Italian translations.
+- Restore individual files or folders into a fresh destination, with a checksum check.
+- Sampled and full verification, backup history, per-folder coverage, and separate check/verification times.
+- Daily discovery and constrained background work, with unmetered, charging, and battery preferences.
+- Exclusions, hidden-file controls, and optional preservation of replaced remote versions.
+- Configuration export/import, verified enrollment, device key rotation, and revocation guidance.
+- Optional encrypted snapshots with an exported recovery key, including document-provider sources.
 - No analytics SDK, advertising SDK, or cloud account operated by PiffBackup.
 
 ## How it works
 
-1. Connect a Hetzner Storage Box and select an existing top-level backup folder.
+1. Verify the server fingerprint, connect your target, and select an existing backup folder.
 2. Choose one or more Android folders and map each one to a destination below
    that backup folder.
 3. Review the initial comparison summary and explicitly start the first upload.
@@ -51,15 +57,44 @@ the remote copy, and PiffBackup never invokes rsync deletion options.
 ## Requirements and limitations
 
 - Android 13 / API 33 or newer.
-- An `arm64-v8a` device.
-- A Hetzner Storage Box with SSH support and external reachability enabled.
+- A supported ARM or x86 Android device.
+- A Hetzner Storage Box or SSH server with rsync and public-key authentication.
+- The server host-key fingerprint, obtained through a trusted console or administrator.
 - Direct installation of the APK and the Android **All files access** permission.
 - Uploads are currently sequential and require a network connection.
-- The current transport is specific to Hetzner's SSH/rsync setup on port 23.
+- Hetzner uses port 23; generic SSH targets support a configurable port.
+- Native folder mappings support mounted primary/removable storage. Removable folders use All files mode.
+- Document providers use the separate encrypted snapshot workflow; their consistency depends on the provider.
 
 PiffBackup is backup software, but it should not be the only copy of important
 data. Test a small folder first and periodically verify that remote files can be
 restored.
+
+## Restore, verification, and encrypted snapshots
+
+Open **Backup tools** from Home. Restore writes into a new `PiffBackup-restored-*`
+folder. Existing files in that folder are retained on retries and a checksum check
+reports conflicts. Verification compares selected local files to their remote
+counterparts; a sample checks up to 100 files, while full mode checks every selected
+file. Neither mode advances the upload checkpoint.
+
+Initial adoption preserves the original, explicit size-match policy. Later
+reconciliation and incremental transfers use checksums. A size match in the first
+preview is not proof that file contents match; use verification to establish that.
+
+Encrypted snapshots are separate from normal rsync backups and use `.pba` files
+under the remote `Encrypted` folder. Export the recovery key before creating one;
+keep it offline, separate from the server. Import it on a replacement phone before
+restoring a snapshot. Configuration exports contain no private keys or recovery
+keys. Snapshots need temporary free space on the phone. SAF sources use the system
+picker and a persisted read grant; they do not need native filesystem paths.
+
+Preserved versions consume server space under `.piffbackup-versions/<job-id>`.
+The app never deletes remote history automatically. Scheduling is approximate:
+Android runs daily checks when the chosen constraints allow. Changes to coverage
+require a reviewed reconciliation before automatic uploads resume.
+
+See [implementation and validation details](docs/IMPLEMENTATION_2026-10-07.md).
 
 ## Build from source
 
@@ -70,7 +105,7 @@ Prerequisites:
 - Android SDK API 37.
 - Android NDK 28.2.13676358 only when rebuilding the bundled native tools.
 
-The repository includes the ARM64 native executables used by the application.
+The repository includes native executables for all four supported Android ABIs.
 Build and verify the Android project with:
 
 ```bash

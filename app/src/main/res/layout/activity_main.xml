@@ -60,6 +60,25 @@
                 android:text="@string/connect_explanation"
                 android:textAppearance="?attr/textAppearanceBodyMedium" />
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/provider_button"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:text="@string/hetzner_provider" />
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/ssh_port">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/port_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:maxLength="5"
+                    android:singleLine="true" />
+            </com.google.android.material.textfield.TextInputLayout>
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/username_layout"
                 android:layout_width="match_parent"
@@ -77,6 +96,31 @@
                     android:maxLength="64"
                     android:singleLine="true" />
             </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/fingerprint_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:hint="@string/expected_server_fingerprint">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/fingerprint_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textVisiblePassword"
+                    android:maxLength="64"
+                    android:singleLine="true" />
+            </com.google.android.material.textfield.TextInputLayout>
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/fingerprint_setup_help"
+                android:textAppearance="?attr/textAppearanceBodySmall" />
+            <CheckBox
+                android:id="@+id/rotate_client_key"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/rotate_client_key" />
 
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/password_layout"

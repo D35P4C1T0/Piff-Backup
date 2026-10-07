@@ -19,6 +19,7 @@ import com.d35p4c1t0.piffbackup.media.MediaStoreMapping
 import com.d35p4c1t0.piffbackup.media.MediaStoreSource
 import java.io.File
 import java.util.UUID
+import kotlinx.coroutines.sync.withLock
 
 sealed interface BackupDiscoveryResult {
     data class Ready(val pending: DurablePendingJob) : BackupDiscoveryResult
@@ -34,8 +35,13 @@ class IncrementalBackupCoordinator(
     private val fileLists: IncrementalFileListStore,
     private val allFiles: AllFilesMetadataPlanner,
     private val volumeRoot: File = Environment.getExternalStorageDirectory(),
+    private val selectionMutex: kotlinx.coroutines.sync.Mutex = kotlinx.coroutines.sync.Mutex(),
+    private val selection: () -> com.d35p4c1t0.piffbackup.backup.FileSelectionPolicy = { com.d35p4c1t0.piffbackup.backup.FileSelectionPolicy() },
 ) {
-    suspend fun discover(profileId: String): BackupDiscoveryResult {
+    suspend fun discover(profileId: String): BackupDiscoveryResult = selectionMutex.withLock { discoverLocked(profileId) }
+
+    private suspend fun discoverLocked(profileId: String): BackupDiscoveryResult {
+        if (configuration.hasActiveOperation()) return BackupDiscoveryResult.Failed
         durableBackup.activeJob(profileId)?.let { return BackupDiscoveryResult.Ready(it) }
         val profile = configuration.profile(profileId) ?: return BackupDiscoveryResult.Failed
         val mappings = configuration.mappings(profileId).filter { it.enabled }
@@ -59,6 +65,7 @@ class IncrementalBackupCoordinator(
                     source = mediaSource,
                     fileListStore = fileLists,
                     requiredRemoteBase = RemoteRelativePath.create(profile.remoteBasePath),
+                    selection = selection(),
                 ).plan(PRIMARY_VOLUME, checkpoint, mediaMappingsById.values.toList())
             ) {
                 is MediaPlanningResult.FullReconciliationRequired -> {
@@ -96,6 +103,7 @@ class IncrementalBackupCoordinator(
                     val roots = mappings.mapNotNull { entity ->
                         mediaDraftsByMapping[entity.id] ?: allFilesDraftsByMapping[entity.id]
                     }
+                    durableBackup.recordCheck(profileId)
                     if (roots.isEmpty()) {
                         durableBackup.establishCheckpoint(profileId, result.proposedCheckpoint)
                         BackupDiscoveryResult.UpToDate

@@ -18,11 +18,13 @@ import java.io.File
 data class RemoteDirectory(
     val name: String,
     val relativePath: String,
+    val isDirectory: Boolean = true,
 )
 
 interface RemoteDirectoryBrowser {
     fun listTopLevel(connection: OnboardingConnection): List<RemoteDirectory>
     fun list(profile: StorageBoxProfileEntity, parent: RemoteRelativePath): List<RemoteDirectory>
+    fun listEntries(profile: StorageBoxProfileEntity, parent: RemoteRelativePath): List<RemoteDirectory> = list(profile, parent)
     fun cancel()
 }
 
@@ -42,12 +44,15 @@ class NativeRemoteDirectoryBrowser(
             username = connection.endpoint.username,
             hostname = connection.endpoint.hostname,
             port = connection.endpoint.port,
-            profileId = connection.profileId,
+            profileId = connection.enrollmentId,
             credentialReference = connection.credentialReference,
             parent = null,
-        ) { output -> RemoteDirectoryListParser.parseTopLevel(output) }
+        ) { output -> RemoteDirectoryListParser.parseTopLevel(output, connection.endpoint.provider == com.d35p4c1t0.piffbackup.transport.RsyncTargetProvider.HETZNER) }
 
-    override fun list(
+    override fun list(profile: StorageBoxProfileEntity, parent: RemoteRelativePath): List<RemoteDirectory> =
+        listEntries(profile, parent).filter { it.isDirectory }
+
+    override fun listEntries(
         profile: StorageBoxProfileEntity,
         parent: RemoteRelativePath,
     ): List<RemoteDirectory> {
@@ -59,12 +64,15 @@ class NativeRemoteDirectoryBrowser(
             username = profile.username,
             hostname = profile.hostname,
             port = profile.port,
-            profileId = profile.id,
+            profileId = profile.id.also {
+                knownHosts.write(it, profile.hostname,
+                    com.d35p4c1t0.piffbackup.onboarding.HostKeyPin.parse(requireNotNull(profile.pinnedHostKey)))
+            },
             credentialReference = requireNotNull(profile.encryptedCredentialRef) {
                 "Credential reference is missing"
             },
             parent = parent,
-        ) { output -> RemoteDirectoryListParser.parse(parent, output) }
+        ) { output -> RemoteDirectoryListParser.parseEntries(parent, output) }
     }
 
     private fun listWithConnection(
@@ -115,7 +123,7 @@ class NativeRemoteDirectoryBrowser(
         }
 
     override fun cancel() {
-        running?.cancel()
+        running?.let { process -> browserCancellationExecutor.execute { process.cancel() } }
     }
 
     private companion object {
@@ -171,14 +179,24 @@ object RemoteDirectoryListParser {
             .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
             .toList()
 
-    fun parseTopLevel(output: String): List<RemoteDirectory> = records(output)
+    fun parseTopLevel(output: String, restricted: Boolean = true): List<RemoteDirectory> = records(output)
         .mapNotNull { name ->
             val path = RemoteRelativePath.create(name)
-            path.takeIf(::isValidStorageBoxBackupRoot)?.let { RemoteDirectory(name, it.value) }
+            path.takeIf { !restricted || isValidStorageBoxBackupRoot(it) }?.let { RemoteDirectory(name, it.value) }
         }
         .distinctBy { it.relativePath }
         .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
         .toList()
+
+    fun parseEntries(parent: RemoteRelativePath, output: String): List<RemoteDirectory> {
+        val pattern = Regex("^([d-]).{9}\\s+[0-9][0-9,]*\\s+[0-9]{4}/[0-9]{2}/[0-9]{2}\\s+[0-9]{2}:[0-9]{2}:[0-9]{2} (.*)\\r?$")
+        return output.lineSequence().mapNotNull { line ->
+            val match = pattern.matchEntire(line) ?: return@mapNotNull null
+            val name = match.groupValues[2].removeSuffix("/")
+            if (!isSafeChildName(name)) return@mapNotNull null
+            RemoteDirectory(name, RemoteRelativePath.create("${parent.value}/$name").value, match.groupValues[1] == "d")
+        }.distinctBy { it.relativePath }.sortedWith(compareByDescending<RemoteDirectory> { it.isDirectory }.thenBy { it.name.lowercase() }).toList()
+    }
 
     private fun records(output: String): Sequence<String> = output.lineSequence()
             .mapNotNull { line ->
@@ -192,3 +210,5 @@ object RemoteDirectoryListParser {
         value.isNotEmpty() && value != "." && value != ".." && '/' !in value && '\u0000' !in value &&
             '\r' !in value && '\n' !in value
 }
+
+private val browserCancellationExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()

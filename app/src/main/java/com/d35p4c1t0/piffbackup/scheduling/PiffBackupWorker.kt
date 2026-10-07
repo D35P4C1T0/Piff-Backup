@@ -25,8 +25,9 @@ class PiffBackupWorker(
         )
         val app = applicationContext as PiffBackupApp
         return try {
+            app.awaitReady()
             when (
-                app.backupExecutor.execute(jobId) { event ->
+                app.executeJob(jobId) { event ->
                     if (event.status == BackupProgressStatus.RUNNING && event.fileName == null) {
                         BackupNotifications.update(applicationContext, jobId, event.percentage)
                     }
@@ -34,11 +35,12 @@ class PiffBackupWorker(
             ) {
                 BackupExecutionResult.SUCCEEDED -> Result.success()
                 BackupExecutionResult.RETRY -> Result.retry()
-                BackupExecutionResult.FAILED -> Result.failure()
+                BackupExecutionResult.FAILED -> { app.backgroundMessages.attention(); Result.failure() }
                 BackupExecutionResult.PAUSED -> Result.failure()
             }
         } catch (cancelled: CancellationException) {
-            app.backupExecutor.requestStop(jobId, explicitPause = false)
+            if (jobId.startsWith("operation-")) app.remoteOperations.stop(jobId)
+            else app.backupExecutor.requestStop(jobId, explicitPause = false)
             applicationContext.getSystemService(NotificationManager::class.java)
                 .cancel(BackupNotifications.NOTIFICATION_ID)
             throw cancelled

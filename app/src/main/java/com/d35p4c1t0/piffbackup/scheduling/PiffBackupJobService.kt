@@ -26,11 +26,13 @@ class PiffBackupJobService : JobService() {
         )
         val app = application as PiffBackupApp
         task = scope.launch {
-            val result = app.backupExecutor.execute(jobId) { event ->
+            app.awaitReady()
+            val result = app.executeJob(jobId) { event ->
                 if (event.status == BackupProgressStatus.RUNNING && event.fileName == null) {
                     BackupNotifications.update(this@PiffBackupJobService, jobId, event.percentage)
                 }
             }
+            if (result == BackupExecutionResult.FAILED) app.backgroundMessages.attention()
             jobFinished(params, result == BackupExecutionResult.RETRY)
         }
         return true
@@ -40,7 +42,8 @@ class PiffBackupJobService : JobService() {
         val jobId = params.extras.getString(BackupScheduler.JOB_ID_KEY) ?: return false
         val app = application as PiffBackupApp
         val explicitlyPaused = app.backupExecutor.wasExplicitlyPaused(jobId)
-        app.backupExecutor.requestStop(jobId, explicitPause = explicitlyPaused)
+        if (jobId.startsWith("operation-")) app.remoteOperations.stop(jobId)
+        else app.backupExecutor.requestStop(jobId, explicitPause = explicitlyPaused)
         task?.cancel()
         task = null
         return !explicitlyPaused

@@ -33,12 +33,14 @@ class AllFilesMetadataPlanner(
     private val snapshots: AllFilesMetadataSnapshotStore,
     private val metadata: LocalMetadataLookup,
     volumeRoot: File,
+    private val allowedRoots: List<File> = listOf(volumeRoot),
+    private val selection: () -> com.d35p4c1t0.piffbackup.backup.FileSelectionPolicy = { com.d35p4c1t0.piffbackup.backup.FileSelectionPolicy() },
 ) {
     private val canonicalVolumeRoot = volumeRoot.canonicalFile
 
     suspend fun plan(mapping: FolderMappingEntity): PlannedAllFilesTransfer {
         require(mapping.enabled && mapping.mode == MappingModeValue.ALL_FILES) { "Mapping is not enabled All files" }
-        val root = CanonicalLocalRoot.create(mapping.canonicalLocalPath, canonicalVolumeRoot).file
+        val root = CanonicalLocalRoot.create(mapping.canonicalLocalPath, allowedRoots).file
         require(root.isDirectory) { "All-files root is unavailable" }
         val listWriter = fileLists.openWriter()
         val snapshotWriter = snapshots.openWriter(listWriter.file.path)
@@ -84,25 +86,27 @@ class AllFilesMetadataPlanner(
     }
 
     fun writeSnapshotForFileList(mapping: FolderMappingEntity, fileListPath: String) {
-        require(mapping.enabled && mapping.mode == MappingModeValue.ALL_FILES) { "Mapping is not enabled All files" }
-        val root = CanonicalLocalRoot.create(mapping.canonicalLocalPath, canonicalVolumeRoot).file
-        require(root.isDirectory) { "All-files root is unavailable" }
+        require(mapping.enabled) { "Mapping is disabled" }
+        val root = CanonicalLocalRoot.create(mapping.canonicalLocalPath, allowedRoots).file
+        require(root.isDirectory) { "Local root is unavailable" }
         val writer = snapshots.openWriter(fileListPath)
         try {
             forEachFileListPath(fileListPath) { relativePath ->
-                val candidate = File(root, relativePath).canonicalFile
-                require(candidate.toPath().startsWith(root.toPath())) { "File-list path escaped local root" }
+                val candidate = File(root, relativePath)
+                require(candidate.canonicalFile.toPath().startsWith(root.toPath())) { "File-list path escaped local root" }
                 val attributes = Files.readAttributes(
                     candidate.toPath(),
                     BasicFileAttributes::class.java,
                     LinkOption.NOFOLLOW_LINKS,
                 )
-                if (attributes.isRegularFile) {
+                require(attributes.isRegularFile) { "Previewed file is no longer a regular file" }
+                run {
                     writer.append(
                         LocalMetadataRecord(
                             relativePath = relativePath,
                             sizeBytes = attributes.size(),
                             modifiedAtEpochMillis = attributes.lastModifiedTime().toMillis().coerceAtLeast(0L),
+                            sha256 = contentHash(candidate),
                         ),
                     )
                 }
@@ -112,6 +116,48 @@ class AllFilesMetadataPlanner(
             writer.abort()
             throw failure
         }
+    }
+
+    suspend fun snapshotBytes(fileListPath: String): Long {
+        var bytes = 0L
+        snapshots.forEachBatch(fileListPath) { records ->
+            records.forEach { bytes = bytes.checkedAdd(it.sizeBytes) }
+        }
+        return bytes
+    }
+
+    suspend fun matchesSnapshot(mapping: FolderMappingEntity, fileListPath: String): Boolean {
+        val root = CanonicalLocalRoot.create(mapping.canonicalLocalPath, allowedRoots).file
+        var matches = true
+        snapshots.forEachBatch(fileListPath) { records ->
+            records.forEach { record ->
+                val candidate = File(root, record.relativePath)
+                val attributes = runCatching {
+                    require(candidate.canonicalFile.toPath().startsWith(root.toPath()))
+                    Files.readAttributes(candidate.toPath(), BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+                }.getOrNull()
+                if (attributes == null || !attributes.isRegularFile ||
+                    attributes.size() != record.sizeBytes ||
+                    attributes.lastModifiedTime().toMillis().coerceAtLeast(0L) != record.modifiedAtEpochMillis ||
+                    record.sha256 != null && runCatching { contentHash(candidate) }.getOrNull() != record.sha256) {
+                    matches = false
+                }
+            }
+        }
+        return matches
+    }
+
+    private fun contentHash(file: File): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        Files.newInputStream(file.toPath(), LinkOption.NOFOLLOW_LINKS).use { input ->
+            val bytes = ByteArray(65536)
+            while (true) {
+                if (Thread.currentThread().isInterrupted) throw InterruptedException()
+                val count = input.read(bytes); if (count < 0) break
+                digest.update(bytes, 0, count)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private fun forEachFileListPath(fileListPath: String, consume: (String) -> Unit) {
@@ -159,6 +205,7 @@ class AllFilesMetadataPlanner(
                 )
                 if (!attributes.isRegularFile) continue
                 val relative = rootPath.relativize(path).joinToString("/") { it.toString() }
+                if (!selection().includes(relative)) continue
                 batch += LocalMetadataRecord(
                     relativePath = RelativeFileListPath.create(relative).value,
                     sizeBytes = attributes.size(),

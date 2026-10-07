@@ -57,6 +57,7 @@ internal class PinningHostKeyVerifier(
     private val expectedHostname: String,
     private val expectedPort: Int,
     expectedPin: HostKeyPin?,
+    private val expectedFingerprint: String? = null,
 ) : HostKeyVerifier {
     private val expected = expectedPin
 
@@ -71,6 +72,10 @@ internal class PinningHostKeyVerifier(
     override fun verify(hostname: String, port: Int, key: PublicKey): Boolean {
         if (hostname != expectedHostname || port != expectedPort) return false
         val offered = runCatching { HostKeyPin.fromPublicKey(key) }.getOrNull() ?: return false
+        if (expectedFingerprint != null && offered.sha256Fingerprint != expectedFingerprint) {
+            rejectedChangedKey = true
+            return false
+        }
         val required = expected ?: capturedPin
         if (required != null && !required.securelyMatches(offered)) {
             rejectedChangedKey = true

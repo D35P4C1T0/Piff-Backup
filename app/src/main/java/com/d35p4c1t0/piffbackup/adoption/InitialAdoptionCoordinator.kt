@@ -29,6 +29,7 @@ import com.d35p4c1t0.piffbackup.rsync.RunningRsyncCommand
 import com.d35p4c1t0.piffbackup.rsync.StrictSshConfig
 import com.d35p4c1t0.piffbackup.scheduling.BackupJobKind
 import java.io.File
+import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 
 data class AdoptionPreviewRoot(
@@ -90,7 +91,7 @@ class NativeAdoptionRsyncExecutor(context: Context) : AdoptionRsyncExecutor {
     private var running: RunningRsyncCommand? = null
 
     override fun preview(root: InitialRootFileList, ssh: StrictSshConfig): RsyncExecutionResult {
-        val command = builder(root).adoptionPreview(root.mapping, ssh, root.file)
+        val command = builder(root).adoptionPreview(root.mapping, ssh, root.file, root.comparison)
         return execute(command, ssh.sshHomeDirectory)
     }
 
@@ -100,12 +101,12 @@ class NativeAdoptionRsyncExecutor(context: Context) : AdoptionRsyncExecutor {
         onProgress: (RsyncProgress) -> Unit,
         onFile: (String) -> Unit,
     ): RsyncExecutionResult {
-        val command = builder(root).adoptionTransfer(root.mapping, ssh, root.file)
+        val command = builder(root).adoptionTransfer(root.mapping, ssh, root.file, root.comparison)
         return execute(command, ssh.sshHomeDirectory, onProgress, onFile)
     }
 
     override fun cancel() {
-        running?.cancel()
+        running?.let { process -> adoptionCancellationExecutor.execute { process.cancel() } }
     }
 
     private fun execute(
@@ -139,6 +140,7 @@ class InitialAdoptionCoordinator(
     private val credentials: OnboardingCredentialManager,
     private val knownHosts: KnownHostStore,
     private val rsync: AdoptionRsyncExecutor,
+    private val selectionMutex: kotlinx.coroutines.sync.Mutex = kotlinx.coroutines.sync.Mutex(),
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     @Volatile
@@ -147,7 +149,9 @@ class InitialAdoptionCoordinator(
     suspend fun preview(
         profileId: String,
         mappings: List<FolderMappingInput>,
-    ): InitialAdoptionResult<InitialAdoptionPreview> {
+    ): InitialAdoptionResult<InitialAdoptionPreview> = selectionMutex.withLock { previewLocked(profileId,mappings) }
+
+    private suspend fun previewLocked(profileId: String, mappings: List<FolderMappingInput>): InitialAdoptionResult<InitialAdoptionPreview> {
         discardPreview()
         if (mappings.isEmpty()) return InitialAdoptionResult.Failure(InitialAdoptionError.INVALID_CONFIGURATION)
         var generatedRoots: List<InitialRootFileList> = emptyList()
@@ -172,8 +176,16 @@ class InitialAdoptionCoordinator(
             if (!snapshot.stable || snapshot.accessScope != MediaAccessScope.FULL) {
                 return InitialAdoptionResult.Failure(InitialAdoptionError.STORAGE_PERMISSION_REQUIRED)
             }
-            val plannedRoots = fileLists.plan(snapshot, entities)
+            val comparison = if (!durableBackup.hasEstablishedBaseline(profileId)) {
+                com.d35p4c1t0.piffbackup.rsync.RsyncComparisonPolicy.INITIAL_SIZE_MATCH
+            } else {
+                com.d35p4c1t0.piffbackup.rsync.RsyncComparisonPolicy.CONTENT
+            }
+            val plannedRoots = fileLists.plan(snapshot, entities.filter { it.enabled })
+                .map { it.copy(comparison = comparison) }
             generatedRoots = plannedRoots
+            prepareMetadataSnapshots(plannedRoots)
+            durableBackup.recordCheck(profileId)
             val previewRoots = credentials.withPrivateKey(requireNotNull(profile.encryptedCredentialRef)) { key ->
                 val ssh = strictConfig(profile, key)
                 plannedRoots.map { root ->
@@ -246,7 +258,7 @@ class InitialAdoptionCoordinator(
             if (!mappingsMatch(preview.roots.map { it.files.entity }, currentMappings)) {
                 throw AdoptionOperationException(InitialAdoptionError.CONFIGURATION_CHANGED)
             }
-            prepareMetadataSnapshots(preview.roots.map { it.files })
+            validatePreviewFiles(preview)
             credentials.withPrivateKey(requireNotNull(profile.encryptedCredentialRef)) { key ->
                 val ssh = strictConfig(profile, key)
                 preview.roots.forEachIndexed { index, root ->
@@ -311,16 +323,13 @@ class InitialAdoptionCoordinator(
         val preview = currentPreview?.takeIf { it.id == previewId }
             ?: return InitialAdoptionResult.Failure(InitialAdoptionError.CONFIGURATION_CHANGED)
         return try {
-            require(preview.summary.itemsToUpload > 0L)
+            require(preview.roots.any { it.files.itemCount > 0L })
             val profile = configuration.profile(preview.profileId)
                 ?: throw AdoptionOperationException(InitialAdoptionError.CONFIGURATION_CHANGED)
             require(profile.configurationRevision == preview.configurationRevision)
             val checkpoint = durableBackup.checkpointForPlanning(preview.profileId, preview.snapshot.volumeName)
-                ?: throw AdoptionOperationException(InitialAdoptionError.CONFIGURATION_CHANGED)
-            require(checkpoint.version == preview.snapshot.version)
-            require(preview.snapshot.generation >= checkpoint.successfulGeneration)
-            prepareMetadataSnapshots(preview.roots.map { it.files })
-            val retainedRoots = preview.roots.filter { it.summary.itemsToUpload > 0L }
+            validatePreviewFiles(preview)
+            val retainedRoots = preview.roots.filter { it.files.itemCount > 0L }
             preview.roots.filterNot { it in retainedRoots }
                 .map { it.files }
                 .filter { it.entity.mode == MappingModeValue.ALL_FILES }
@@ -329,19 +338,22 @@ class InitialAdoptionCoordinator(
                 }
             val pending = durableBackup.persistPendingJob(
                 PendingBackupJobDraft(
-                    id = BackupJobKind.reconciliationId(preview.id),
+                    id = if (preview.roots.first().files.comparison ==
+                        com.d35p4c1t0.piffbackup.rsync.RsyncComparisonPolicy.INITIAL_SIZE_MATCH) {
+                        BackupJobKind.adoptionId(preview.id)
+                    } else BackupJobKind.reconciliationId(preview.id),
                     profileId = preview.profileId,
                     volumeName = preview.snapshot.volumeName,
                     mediaStoreVersion = preview.snapshot.version,
                     configurationRevision = preview.configurationRevision,
-                    previousGeneration = checkpoint.successfulGeneration,
+                    previousGeneration = checkpoint?.successfulGeneration?.coerceAtMost(preview.snapshot.generation) ?: 0L,
                     targetGeneration = preview.snapshot.generation,
                     roots = retainedRoots.map { root ->
                         PendingRootDraft(
                             folderMappingId = root.files.entity.id,
                             fileListPath = root.files.file.path,
-                            totalFiles = root.summary.itemsToUpload,
-                            totalBytes = root.summary.bytesToUpload,
+                            totalFiles = root.files.itemCount,
+                            totalBytes = allFiles.snapshotBytes(root.files.file.path),
                         )
                     },
                 ),
@@ -375,8 +387,17 @@ class InitialAdoptionCoordinator(
     }
 
     private suspend fun prepareMetadataSnapshots(roots: List<InitialRootFileList>) {
-        roots.filter { it.entity.mode == MappingModeValue.ALL_FILES }.forEach { root ->
+        roots.forEach { root ->
             allFiles.writeSnapshotForFileList(root.entity, root.file.path)
+        }
+    }
+
+    private suspend fun validatePreviewFiles(preview: InitialAdoptionPreview) {
+        val snapshot = mediaSource.snapshot(VOLUME_NAME)
+        if (!snapshot.stable || snapshot.version != preview.snapshot.version ||
+            snapshot.accessScope != MediaAccessScope.FULL ||
+            preview.roots.any { !allFiles.matchesSnapshot(it.files.entity, it.files.file.path) }) {
+            throw AdoptionOperationException(InitialAdoptionError.CONFIGURATION_CHANGED)
         }
     }
 
@@ -397,7 +418,8 @@ class InitialAdoptionCoordinator(
             hostname = profile.hostname,
             port = profile.port,
             identityFile = key,
-            sshHomeDirectory = knownHosts.homeDirectory(profile.id),
+            sshHomeDirectory = knownHosts.write(profile.id, profile.hostname,
+                com.d35p4c1t0.piffbackup.onboarding.HostKeyPin.parse(requireNotNull(profile.pinnedHostKey))),
         )
 
     private fun mappingsMatch(
@@ -447,3 +469,5 @@ class InitialAdoptionCoordinator(
         const val VOLUME_NAME = "external_primary"
     }
 }
+
+private val adoptionCancellationExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()

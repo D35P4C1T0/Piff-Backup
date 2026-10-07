@@ -3,6 +3,7 @@ package com.d35p4c1t0.piffbackup.ui
 enum class HomeBackupStatus {
     EVERYTHING_BACKED_UP,
     LOOKING_FOR_CHANGES,
+    QUEUED,
     NEW_ITEMS_READY,
     BACKING_UP,
     PAUSED,
@@ -16,6 +17,7 @@ data class HomeScreenState(
     val changedItems: Long = 0L,
     val changedBytes: Long = 0L,
     val progressPercentage: Int? = null,
+    val operation: Boolean = false,
 ) {
     init {
         require(mappingCount >= 0) { "Mapping count must not be negative" }

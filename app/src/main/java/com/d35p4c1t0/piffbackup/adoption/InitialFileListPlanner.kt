@@ -24,12 +24,16 @@ data class InitialRootFileList(
     val mapping: BackupMapping,
     val file: File,
     val itemCount: Long,
+    val comparison: com.d35p4c1t0.piffbackup.rsync.RsyncComparisonPolicy =
+        com.d35p4c1t0.piffbackup.rsync.RsyncComparisonPolicy.INITIAL_SIZE_MATCH,
 )
 
 class InitialFileListPlanner(
     private val source: MediaStoreSource,
     private val store: IncrementalFileListStore,
     volumeRoot: File,
+    private val allowedRoots: List<File> = listOf(volumeRoot),
+    private val selection: () -> com.d35p4c1t0.piffbackup.backup.FileSelectionPolicy = { com.d35p4c1t0.piffbackup.backup.FileSelectionPolicy() },
 ) {
     private val canonicalVolumeRoot = volumeRoot.canonicalFile
 
@@ -40,7 +44,7 @@ class InitialFileListPlanner(
         require(snapshot.stable) { "MediaStore snapshot is unstable" }
         val accumulators = mappings.map { entity ->
             val mapping = BackupMapping(
-                localRoot = CanonicalLocalRoot.create(entity.canonicalLocalPath, canonicalVolumeRoot),
+                localRoot = CanonicalLocalRoot.create(entity.canonicalLocalPath, allowedRoots),
                 remoteRoot = RemoteRelativePath.create(entity.relativeRemotePath),
             )
             RootAccumulator(entity, mapping, store.openWriter())
@@ -76,6 +80,7 @@ class InitialFileListPlanner(
             var relativePath: RelativeFileListPath? = null
             mediaMappings.forEachIndexed { index, mapping ->
                 val candidate = mapping.relativeFilePath(row) ?: return@forEachIndexed
+                if (!selection().includes(candidate.value)) return@forEachIndexed
                 require(matchedIndex == null) { "A media item matched overlapping folders" }
                 matchedIndex = index
                 relativePath = candidate
@@ -92,7 +97,7 @@ class InitialFileListPlanner(
                 override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
                     if (attrs.isRegularFile) {
                         val relative = localRoot.relativize(file).joinToString("/") { it.toString() }
-                        root.writer.append(RelativeFileListPath.create(relative))
+                        if (selection().includes(relative)) root.writer.append(RelativeFileListPath.create(relative))
                     }
                     return FileVisitResult.CONTINUE
                 }

@@ -10,6 +10,13 @@ data class RsyncCommand(
     val environment: Map<String, String>,
     val outputKind: RsyncOutputKind,
 ) {
+    fun preservingVersions(versionId: String): RsyncCommand {
+        require(Regex("[A-Za-z0-9._-]{1,128}").matches(versionId))
+        val split = arguments.indexOf("--")
+        require(split >= 0)
+        return copy(arguments = arguments.take(split) +
+            listOf("--backup", "--backup-dir=.piffbackup-versions/$versionId") + arguments.drop(split))
+    }
     init {
         require(arguments.isNotEmpty()) { "Rsync command must not be empty" }
         require(arguments.none { '\u0000' in it }) { "Rsync arguments must not contain NUL" }
@@ -17,6 +24,11 @@ data class RsyncCommand(
             "Destructive rsync options are forbidden"
         }
     }
+}
+
+enum class RsyncComparisonPolicy(val option: String) {
+    INITIAL_SIZE_MATCH("--size-only"),
+    CONTENT("--checksum"),
 }
 
 enum class RsyncOutputKind {
@@ -39,13 +51,15 @@ class RsyncCommandBuilder(
         mapping: BackupMapping,
         ssh: StrictSshConfig,
         fileList: java.io.File? = null,
-    ): RsyncCommand = adoption(mapping, ssh, fileList, dryRun = true)
+        comparison: RsyncComparisonPolicy = RsyncComparisonPolicy.INITIAL_SIZE_MATCH,
+    ): RsyncCommand = adoption(mapping, ssh, fileList, dryRun = true, comparison)
 
     fun adoptionTransfer(
         mapping: BackupMapping,
         ssh: StrictSshConfig,
         fileList: java.io.File? = null,
-    ): RsyncCommand = adoption(mapping, ssh, fileList, dryRun = false)
+        comparison: RsyncComparisonPolicy = RsyncComparisonPolicy.INITIAL_SIZE_MATCH,
+    ): RsyncCommand = adoption(mapping, ssh, fileList, dryRun = false, comparison)
 
     fun incrementalTransfer(
         transfer: PlannedMediaTransfer,
@@ -68,10 +82,12 @@ class RsyncCommandBuilder(
         }
         val options = mutableListOf(
             rsyncExecutable.path,
-            "-rlt",
+            "-rt",
+            "--no-links",
             "--from0",
             "--files-from=${fileList.path}",
-            "--whole-file",
+            "--checksum",
+            "--no-whole-file",
             "--partial",
             "--partial-dir=.rsync-partial",
             "--no-owner",
@@ -101,13 +117,15 @@ class RsyncCommandBuilder(
         ssh: StrictSshConfig,
         fileList: java.io.File?,
         dryRun: Boolean,
+        comparison: RsyncComparisonPolicy,
     ): RsyncCommand {
         validateMappingAndLocalRoot(mapping)
         val options = mutableListOf(
             rsyncExecutable.path,
-            "-rlt",
-            "--size-only",
-            "--whole-file",
+            "-rt",
+            "--no-links",
+            comparison.option,
+            "--no-whole-file",
             "--partial",
             "--partial-dir=.rsync-partial",
             "--no-owner",
@@ -154,8 +172,8 @@ class RsyncCommandBuilder(
     }
 
     companion object {
-        const val ITEM_RECORD_PREFIX = "PIFFBACKUP-ITEM:"
-        const val ITEM_RECORD_FORMAT = "$ITEM_RECORD_PREFIX%i:%l:%n"
+        const val ITEM_RECORD_PREFIX = "PIFFBACKUP-FILE:"
+        const val ITEM_RECORD_FORMAT = "$ITEM_RECORD_PREFIX%i:%l:%b:%n"
         private const val IO_TIMEOUT_SECONDS = 60
     }
 }

@@ -17,10 +17,10 @@ class RsyncExitClassifierTest {
     }
 
     @Test
-    fun `cancellation takes precedence and partial outcomes remain retryable`() {
+    fun `cancellation takes precedence and persistent partial outcomes require attention`() {
         assertEquals(RsyncExitKind.CANCELLED, RsyncExitClassifier.classify(0, cancelled = true))
         assertTrue(RsyncExitKind.PARTIAL_TRANSFER_ERROR.partialTransfer)
-        assertTrue(RsyncExitKind.VANISHED_SOURCE_FILES.retryable)
+        assertFalse(RsyncExitKind.VANISHED_SOURCE_FILES.retryable)
         assertFalse(RsyncExitKind.SYNTAX_OR_USAGE.retryable)
     }
 }

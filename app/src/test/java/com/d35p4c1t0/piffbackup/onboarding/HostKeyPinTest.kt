@@ -41,5 +41,13 @@ class HostKeyPinTest {
         assertFalse(verifier.verify("other.example", 23, first))
     }
 
+    @Test fun `expected fingerprint rejects an impostor on first enrollment`() {
+        val server = rsaKey()
+        val verifier = PinningHostKeyVerifier("box.example",23,null,HostKeyPin.fromPublicKey(server).sha256Fingerprint)
+        assertFalse(verifier.verify("box.example",23,rsaKey()))
+        assertEquals(null,verifier.capturedPin)
+        assertTrue(verifier.verify("box.example",23,server))
+    }
+
     private fun rsaKey() = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair().public
 }

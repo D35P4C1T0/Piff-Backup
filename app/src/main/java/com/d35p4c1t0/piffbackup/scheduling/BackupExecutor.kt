@@ -39,15 +39,19 @@ fun interface BackupExecutionReporter {
 }
 
 class BackupExecutor(
-    context: Context,
+    private val context: Context,
     private val configuration: DurableConfigurationStore,
     private val durableBackup: DurableBackupStore,
     private val credentials: OnboardingCredentialManager,
     private val knownHosts: KnownHostStore,
     private val volumeRoot: File = Environment.getExternalStorageDirectory(),
+    private val allowedRoots: List<File> = listOf(volumeRoot),
+    private val preferences: com.d35p4c1t0.piffbackup.settings.BackupPreferences =
+        com.d35p4c1t0.piffbackup.settings.BackupPreferences(context),
 ) {
     private val locator = NativeToolLocator(context)
     private val engine = RsyncCommandEngine()
+    private val stopExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     private val executionLock = ReentrantLock()
     private val running = AtomicReference<RunningRsyncCommand?>(null)
     private val cancelledJob = AtomicReference<String?>(null)
@@ -58,15 +62,26 @@ class BackupExecutor(
         reporter: BackupExecutionReporter = BackupExecutionReporter {},
     ): BackupExecutionResult {
         if (!wasExplicitlyPaused(jobId)) cancelledJob.compareAndSet(jobId, null)
-        return withContext(Dispatchers.IO) {
-            executionLock.withLock { executeLocked(jobId, reporter) }
+        return try { withContext(Dispatchers.IO) {
+            kotlinx.coroutines.runInterruptible {
+                executionLock.lockInterruptibly()
+                try { executeLocked(jobId, reporter) } finally { executionLock.unlock() }
+            }
+        } } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            requestStop(jobId, explicitPause = wasExplicitlyPaused(jobId))
+            withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
+                durableBackup.markInterrupted(jobId, wasExplicitlyPaused(jobId))
+            }
+            throw cancelled
         }
     }
 
     fun requestStop(jobId: String, explicitPause: Boolean) {
         cancelledJob.set(jobId)
         if (explicitPause) explicitlyPausedJob.set(jobId)
-        running.get()?.cancel()
+        running.get()?.let { process ->
+            stopExecutor.execute { process.cancel() }
+        }
     }
 
     fun clearStop(jobId: String) {
@@ -74,14 +89,19 @@ class BackupExecutor(
         explicitlyPausedJob.compareAndSet(jobId, null)
     }
 
+    suspend fun awaitStopped() = withContext(Dispatchers.IO) {
+        executionLock.withLock { Unit }
+    }
+
     fun wasExplicitlyPaused(jobId: String): Boolean = explicitlyPausedJob.get() == jobId
 
     private fun executeLocked(jobId: String, reporter: BackupExecutionReporter): BackupExecutionResult {
         if (cancelledJob.get() == jobId) return BackupExecutionResult.PAUSED
         val initial = runBlocking { durableBackup.pendingJob(jobId) } ?: return BackupExecutionResult.SUCCEEDED
+        runBlocking { durableBackup.beginAttempt(jobId) }
         val profile = runBlocking { configuration.profile(initial.job.profileId) }
             ?: return BackupExecutionResult.FAILED
-        val reconciliation = BackupJobKind.isReconciliation(initial.job.id)
+        val reconciliation = BackupJobKind.resetsCheckpoint(initial.job.id)
         val credentialReference = profile.encryptedCredentialRef ?: return BackupExecutionResult.FAILED
         return try {
             credentials.withPrivateKey(credentialReference) { key ->
@@ -90,7 +110,8 @@ class BackupExecutor(
                     hostname = profile.hostname,
                     port = profile.port,
                     identityFile = key,
-                    sshHomeDirectory = knownHosts.homeDirectory(profile.id),
+                    sshHomeDirectory = knownHosts.write(profile.id, profile.hostname,
+                        com.d35p4c1t0.piffbackup.onboarding.HostKeyPin.parse(requireNotNull(profile.pinnedHostKey))),
                 )
                 initial.roots.filter { it.status != PendingRootStatusValue.SUCCEEDED }.forEach { root ->
                     if (cancelledJob.get() == jobId) {
@@ -99,7 +120,9 @@ class BackupExecutor(
                         return@withPrivateKey BackupExecutionResult.PAUSED
                     }
                     val runningJob = runBlocking { durableBackup.markRootRunning(jobId, root.folderMappingId) }
-                    val command = command(profile.remoteBasePath, root, ssh, reconciliation)
+                    val command = command(profile.remoteBasePath, root, ssh, reconciliation).let {
+                        if (preferences.preserveVersions) it.preservingVersions(jobId) else it
+                    }
                     var transferredBytes = root.completedBytes
                     val completedRootBytes = runningJob.roots
                         .filter { it.status == PendingRootStatusValue.SUCCEEDED }
@@ -133,17 +156,24 @@ class BackupExecutor(
                         },
                     )
                     running.set(process)
+                    if (cancelledJob.get() == jobId) process.cancel()
                     val result = try {
                         process.await()
                     } finally {
                         running.compareAndSet(process, null)
                     }
+                    val stable = if (result.exitKind == RsyncExitKind.SUCCESS && reconciliation) runBlocking {
+                        val mapping = configuration.mappings(profile.id).single { it.id == root.folderMappingId }
+                        (context.applicationContext as com.d35p4c1t0.piffbackup.PiffBackupApp).allFilesMetadataPlanner
+                            .matchesSnapshot(mapping, root.fileListPath)
+                    } else true
                     val outcome = when {
+                        !stable -> RootExecutionOutcome.PERMANENT_FAILURE
                         result.exitKind == RsyncExitKind.SUCCESS -> RootExecutionOutcome.SUCCESS
                         result.exitKind == RsyncExitKind.CANCELLED || cancelledJob.get() == jobId -> {
                             RootExecutionOutcome.CANCELLED
                         }
-                        result.exitKind.retryable -> RootExecutionOutcome.RETRYABLE_FAILURE
+                        result.exitKind.retryable && initial.job.attempts < 2 -> RootExecutionOutcome.RETRYABLE_FAILURE
                         else -> RootExecutionOutcome.PERMANENT_FAILURE
                     }
                     val updated = runBlocking {
@@ -162,10 +192,12 @@ class BackupExecutor(
                                 transferredBytes
                             },
                             rsyncExitCode = result.process.exitCode,
+                            uploadedFiles = result.transferredFiles,
+                            uploadedBytes = result.transferredBytes,
                             sanitizedErrorCode = if (outcome == RootExecutionOutcome.SUCCESS) {
                                 null
                             } else {
-                                "RSYNC_${result.exitKind.name}"
+                                if (!stable) "SOURCE_CHANGED" else "RSYNC_${result.exitKind.name}"
                             },
                         )
                     }
@@ -189,6 +221,12 @@ class BackupExecutor(
                 runCatching { runBlocking { durableBackup.cleanupSucceededJobs() } }
                 BackupExecutionResult.SUCCEEDED
             }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            requestStop(jobId, explicitPause = wasExplicitlyPaused(jobId))
+            throw cancelled
+        } catch (interrupted: InterruptedException) {
+            requestStop(jobId, explicitPause = wasExplicitlyPaused(jobId))
+            throw interrupted
         } catch (_: Exception) {
             val pending = runBlocking { durableBackup.pendingJob(jobId) }
             val activeRoot = pending?.roots?.firstOrNull { it.status == PendingRootStatusValue.RUNNING }
@@ -199,6 +237,8 @@ class BackupExecutor(
                         mappingId = activeRoot.folderMappingId,
                         outcome = if (cancelledJob.get() == jobId) {
                             RootExecutionOutcome.CANCELLED
+                        } else if (initial.job.attempts >= 2) {
+                            RootExecutionOutcome.PERMANENT_FAILURE
                         } else {
                             RootExecutionOutcome.RETRYABLE_FAILURE
                         },
@@ -210,13 +250,16 @@ class BackupExecutor(
                 }
             }
             val paused = cancelledJob.get() == jobId
+            if (!paused && initial.job.attempts >= 2 && activeRoot == null) runBlocking {
+                durableBackup.failJob(jobId, "EXECUTION_FAILED")
+            }
             publish(
                 jobId,
                 if (paused) BackupProgressStatus.PAUSED else BackupProgressStatus.FAILED,
                 pending?.job?.let(::percentage) ?: 0,
                 reporter,
             )
-            if (paused) BackupExecutionResult.PAUSED else BackupExecutionResult.RETRY
+            if (paused) BackupExecutionResult.PAUSED else if (initial.job.attempts >= 2) BackupExecutionResult.FAILED else BackupExecutionResult.RETRY
         }
     }
 
@@ -231,11 +274,14 @@ class BackupExecutor(
         remoteBasePath = RemoteRelativePath.create(remoteBasePath),
     ).let { builder ->
         val mapping = BackupMapping(
-            localRoot = CanonicalLocalRoot.create(root.canonicalLocalPath, volumeRoot),
+            localRoot = CanonicalLocalRoot.create(root.canonicalLocalPath, allowedRoots),
             remoteRoot = RemoteRelativePath.create(root.relativeRemotePath),
         )
         if (reconciliation) {
-            builder.adoptionTransfer(mapping, ssh, File(root.fileListPath))
+            builder.adoptionTransfer(mapping, ssh, File(root.fileListPath),
+                if (BackupJobKind.isAdoption(root.jobId)) {
+                    com.d35p4c1t0.piffbackup.rsync.RsyncComparisonPolicy.INITIAL_SIZE_MATCH
+                } else com.d35p4c1t0.piffbackup.rsync.RsyncComparisonPolicy.CONTENT)
         } else {
             builder.incrementalTransfer(mapping, File(root.fileListPath), ssh)
         }

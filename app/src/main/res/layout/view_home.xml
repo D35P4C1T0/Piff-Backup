@@ -101,6 +101,15 @@
         app:icon="@drawable/ic_backup"
         app:iconGravity="textStart" />
 
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/home_recover_button"
+        style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp"
+        android:visibility="gone"
+        android:text="@string/replan_backup" />
+
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/home_transfer_log_card"
         android:layout_width="match_parent"
@@ -178,4 +187,11 @@
         app:icon="@drawable/ic_settings"
         app:iconGravity="textStart"
         app:iconPadding="16dp" />
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/home_tools_button"
+        style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="56dp"
+        android:text="@string/backup_tools" />
 </LinearLayout>
